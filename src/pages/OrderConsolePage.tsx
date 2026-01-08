@@ -1,5 +1,5 @@
 // pages/OrderConsolePage.tsx
-import {useEffect, useState} from "react"
+import {useEffect, useRef, useState} from "react"
 import {IconEdit, IconEye, IconPackage} from "@tabler/icons-react"
 import {Button} from "@/components/ui/button"
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from "@/components/ui/table"
@@ -71,11 +71,17 @@ const OrderConsolePage = () => {
             setLoading(false)
         }
     }
-
+    //防抖
+    const lastQueryKey = useRef<string>("")
     // 页面加载和筛选条件变化时获取数据
     useEffect(() => {
+        const key = `${page}-${statusFilter}-${searchQuery}`
+        // 👇 如果参数没变，不请求
+        if (lastQueryKey.current === key) return
+        lastQueryKey.current = key
         fetchOrders()
     }, [page, statusFilter, searchQuery])
+
 
     // 打开更新对话框
     const handleOpenUpdateDialog = (order: Order) => {
