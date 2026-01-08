@@ -1,4 +1,5 @@
 import * as React from "react"
+import {Link} from "react-router" // 👈 添加导入
 import {
     IconCamera,
     IconChartBar,
@@ -6,7 +7,6 @@ import {
     IconDatabase,
     IconFileAi,
     IconFileDescription,
-    IconInnerShadowTop,
     IconListDetails,
     IconReport,
     IconSettings,
@@ -25,28 +25,24 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import {useAuthStore} from "@/stores/authStore.ts";
+import {useAuthStore} from "@/stores/authStore.ts"
+import logo from "@/assets/logo.png"
 
 const data = {
-    user: {
-        name: "shadcn",
-        email: "m@example.com",
-        avatar: "/avatars/shadcn.jpg",
-    },
     navMain: [
         {
             title: "Dashboard",
-            url: "#",
+            url: "/",
             icon: IconDashboard,
         },
         {
-            title: "Lifecycle",
-            url: "#",
+            title: "OrderConsole",
+            url: "/orderConsole",
             icon: IconListDetails,
         },
         {
-            title: "Analytics",
-            url: "#",
+            title: "Chart",
+            url: "/chart",
             icon: IconChartBar,
         },
     ],
@@ -101,26 +97,27 @@ const data = {
     navSecondary: [
         {
             title: "Settings",
-            url: "#",
+            url: "/settings",
             icon: IconSettings,
         },
     ],
     documents: [
         {
             name: "Data Library",
-            url: "#",
+            url: "/dataLibrary",
             icon: IconDatabase,
         },
         {
             name: "Reports",
-            url: "#",
+            url: "/reports",
             icon: IconReport,
         },
     ],
 }
 
 export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
-    const authState = useAuthStore.getState();
+    const authState = useAuthStore.getState()
+
     return (
         <Sidebar collapsible="offcanvas" {...props}>
             <SidebarHeader>
@@ -130,10 +127,13 @@ export function AppSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
                             asChild
                             className="data-[slot=sidebar-menu-button]:p-1.5!"
                         >
-                            <a href="#">
-                                <IconInnerShadowTop className="size-5!"/>
-                                <span className="text-base font-semibold">Acme Inc.</span>
-                            </a>
+                            <Link to="/">
+                                <div
+                                    className="text-primary-foreground flex size-6 items-center justify-center rounded-md">
+                                    <img src={logo} alt="Logo"/>
+                                </div>
+                                <span className="text-base font-semibold">K Mall.</span>
+                            </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>

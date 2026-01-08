@@ -9,8 +9,8 @@ if (!PB_URL) {
 
 const pb = new PocketBase(PB_URL)
 
-// 可选：防止请求被取消
-pb.autoCancellation(false)
+// 防止请求重复
+pb.autoCancellation(true)
 
 export default pb
 
