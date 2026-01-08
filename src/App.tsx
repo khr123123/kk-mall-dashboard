@@ -4,10 +4,8 @@ import {DataTable} from "@/components/data-table"
 import {SectionCards} from "@/components/section-cards"
 import {SiteHeader} from "@/components/site-header"
 import {SidebarInset, SidebarProvider,} from "@/components/ui/sidebar"
-
 import data from "@/app/dashboard/data.json"
 import * as React from "react";
-import {Outlet} from "react-router";
 
 export function App() {
     return (
@@ -20,8 +18,6 @@ export function App() {
             }
         >
             <AppSidebar variant="inset"/>
-
-            <Outlet />
             <SidebarInset>
                 <SiteHeader/>
                 <div className="flex flex-1 flex-col">
@@ -37,7 +33,7 @@ export function App() {
                 </div>
             </SidebarInset>
         </SidebarProvider>
-
     )
 }
+
 export default App

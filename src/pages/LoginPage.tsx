@@ -1,6 +1,6 @@
-import {GalleryVerticalEnd} from "lucide-react"
-
 import {LoginForm} from "@/components/login-form"
+import catImg from "@/assets/kitten.jpg"
+import logo from "@/assets/logo.png"
 
 export default function LoginPage() {
     return (
@@ -9,10 +9,10 @@ export default function LoginPage() {
                 <div className="flex justify-center gap-2 md:justify-start">
                     <a href="#" className="flex items-center gap-2 font-medium">
                         <div
-                            className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
-                            <GalleryVerticalEnd className="size-4"/>
+                            className="text-primary-foreground flex size-6 items-center justify-center rounded-md">
+                            <img src={logo} alt="Logo"/>
                         </div>
-                        Acme Inc.
+                        <span className="font-mono">K Mall.</span>
                     </a>
                 </div>
                 <div className="flex flex-1 items-center justify-center">
@@ -22,10 +22,8 @@ export default function LoginPage() {
                 </div>
             </div>
             <div className="bg-muted relative hidden lg:block">
-                <img
-                    src="/src/assets/frontpic.jpg"
-                    alt="Image"
-                    className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+                <img src={catImg} alt="Image"
+                     className="absolute inset-0 h-full w-full object-cover object-right dark:brightness-[0.2] dark:grayscale"
                 />
             </div>
         </div>

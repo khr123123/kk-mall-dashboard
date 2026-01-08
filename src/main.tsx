@@ -1,20 +1,28 @@
-import {StrictMode} from "react"
-import {createRoot} from "react-dom/client"
-import "./index.css"
-import App from "./App.tsx"
+import {StrictMode} from 'react'
+import {createRoot} from 'react-dom/client'
 import {BrowserRouter, Route, Routes} from 'react-router'
-import About from "@/pages/About.tsx";
-import LoginPage from "./pages/LoginPage.tsx"
+import App from './App'
+import About from '@/pages/About'
+import LoginPage from '@/pages/LoginPage'
+import {Toaster} from '@/components/ui/sonner'
+import {AuthWrapper} from '@/wrapper/AuthWrapper'
+import {AuthCheck} from '@/wrapper/AuthCheck'
+import "./index.css"
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById('root')!).render(
     <StrictMode>
         <BrowserRouter>
-            <Routes>
-                <Route path='/' element={<App/>}>
-                </Route>
-                <Route path='about' element={<About/>}></Route>
-                <Route path='login' element={<LoginPage/>}></Route>
-            </Routes>
+            <AuthWrapper>
+                <Routes>
+                    <Route path="/login" element={<LoginPage/>}/>
+                    <Route element={<AuthCheck/>}>
+                        <Route path="/" element={<App/>}/>
+                        <Route path="/about" element={<About/>}/>
+                    </Route>
+                </Routes>
+            </AuthWrapper>
         </BrowserRouter>
+        {/*全局组件*/}
+        <Toaster position="top-center"/>
     </StrictMode>
 )
