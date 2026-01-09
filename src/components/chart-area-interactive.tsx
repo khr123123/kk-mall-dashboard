@@ -1,15 +1,15 @@
-"use client"
-
 import * as React from "react"
-import {Area, AreaChart, CartesianGrid, XAxis} from "recharts"
+import {Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis} from "recharts"
 import {useIsMobile} from "@/hooks/use-mobile"
-import {Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle,} from "@/components/ui/card"
-import {type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent,} from "@/components/ui/chart"
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select"
-import {ToggleGroup, ToggleGroupItem,} from "@/components/ui/toggle-group"
-import pb from "@/lib/pocketbase.ts";
-import type {RecordModel} from "pocketbase";
-import type {Order} from "@/pages/OrderConsolePage.tsx";
+import {Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
+import {type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent} from "@/components/ui/chart"
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select"
+import {ToggleGroup, ToggleGroupItem} from "@/components/ui/toggle-group"
+import {Skeleton} from "@/components/ui/skeleton"
+import pb from "@/lib/pocketbase.ts"
+import type {RecordModel} from "pocketbase"
+import type {Order} from "@/pages/OrderConsolePage.tsx"
+import {DollarSign, ShoppingBag, TrendingDown, TrendingUp} from "lucide-react"
 
 interface ChartData {
     date: string
@@ -21,11 +21,11 @@ interface ChartData {
 const chartConfig = {
     orders: {
         label: "Orders",
-        color: "var(--primary)",
+        color: "hsl(var(--chart-1))",
     },
     revenue: {
         label: "Revenue",
-        color: "var(--chart-1)",
+        color: "hsl(var(--chart-2))",
     },
 } satisfies ChartConfig
 
@@ -50,7 +50,6 @@ export function ChartAreaInteractive() {
         try {
             setIsLoading(true)
 
-            // 根据时间范围计算开始日期
             const endDate = new Date()
             const startDate = new Date()
 
@@ -68,10 +67,7 @@ export function ChartAreaInteractive() {
                     startDate.setDate(endDate.getDate() - 90)
             }
 
-            // 获取指定时间范围内的订单数据
             const orders = await fetchOrdersByDateRange(startDate, endDate)
-
-            // 将订单数据按天聚合
             const aggregatedData = aggregateOrdersByDay(orders, startDate, endDate)
 
             setChartData(aggregatedData)
@@ -87,7 +83,6 @@ export function ChartAreaInteractive() {
             const startDateStr = startDate.toISOString()
             const endDateStr = endDate.toISOString()
 
-            // 获取订单数据，包含订单日期和总额
             return await pb.collection('orders').getFullList({
                 filter: `order_date >= "${startDateStr}" && order_date <= "${endDateStr}"`,
                 fields: 'order_date,total_amount',
@@ -100,18 +95,15 @@ export function ChartAreaInteractive() {
     }
 
     const aggregateOrdersByDay = (orders: Array<RecordModel> | Order[], startDate: Date, endDate: Date): ChartData[] => {
-        // 创建日期范围内的所有天数
         const dateMap: { [key: string]: { orders: number; revenue: number } } = {}
 
-        // 初始化所有日期为0
         const currentDate = new Date(startDate)
         while (currentDate <= endDate) {
             const dateKey = currentDate.toISOString().split('T')[0]
-            dateMap[dateKey] = {orders: 0, revenue: 0}
+            dateMap[dateKey] = { orders: 0, revenue: 0 }
             currentDate.setDate(currentDate.getDate() + 1)
         }
 
-        // 聚合订单数据
         orders.forEach(order => {
             if (order.order_date) {
                 const orderDate = new Date(order.order_date)
@@ -124,8 +116,7 @@ export function ChartAreaInteractive() {
             }
         })
 
-        // 转换为数组格式并格式化
-        const result: ChartData[] = Object.keys(dateMap)
+        return Object.keys(dateMap)
             .sort()
             .map(date => ({
                 date,
@@ -133,8 +124,6 @@ export function ChartAreaInteractive() {
                 revenue: dateMap[date].revenue,
                 revenueFormatted: formatCurrency(dateMap[date].revenue)
             }))
-
-        return result
     }
 
     const formatCurrency = (amount: number) => {
@@ -165,13 +154,11 @@ export function ChartAreaInteractive() {
         return date >= startDate
     })
 
-    // 计算总统计
     const totalStats = filteredData.reduce((acc, curr) => ({
         totalOrders: acc.totalOrders + curr.orders,
         totalRevenue: acc.totalRevenue + curr.revenue
-    }), {totalOrders: 0, totalRevenue: 0})
+    }), { totalOrders: 0, totalRevenue: 0 })
 
-    // 计算增长趋势
     const calculateTrend = (data: ChartData[]) => {
         if (data.length < 2) return 0
 
@@ -190,52 +177,64 @@ export function ChartAreaInteractive() {
         return (
             <Card className="@container/card">
                 <CardHeader>
-                    <CardTitle className="h-6 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/4"></CardTitle>
-                    <CardDescription
-                        className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/2"></CardDescription>
+                    <Skeleton className="h-6 w-1/4" />
+                    <Skeleton className="h-4 w-1/2 mt-2" />
                     <CardAction>
-                        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-40"></div>
+                        <Skeleton className="h-10 w-40" />
                     </CardAction>
                 </CardHeader>
                 <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-                    <div
-                        className="aspect-auto h-[250px] w-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                    <Skeleton className="aspect-auto h-75 w-full" />
                 </CardContent>
             </Card>
         )
     }
 
     return (
-        <Card className="@container/card">
-            <CardHeader>
-                <CardTitle>
-                    {activeMetric === 'revenue' ? 'Revenue Overview' : 'Order Overview'}
-                </CardTitle>
-                <CardDescription>
-          <span className="hidden @[540px]/card:block">
-            {activeMetric === 'revenue'
-                ? `Total revenue: ${formatCurrency(totalStats.totalRevenue)}`
-                : `Total orders: ${totalStats.totalOrders.toLocaleString()}`
-            }
-          </span>
+        <Card className="@container/card  shadow-lg">
+            <CardHeader className="border-b bg-linear-to-r -mt-6 from-primary/5 via-transparent to-transparent">
+                <div className="flex items-center  gap-2 pt-4">
+                    {activeMetric === 'revenue' ? (
+                        <DollarSign className="h-5 w-5 text-primary" />
+                    ) : (
+                        <ShoppingBag className="h-5 w-5 text-primary" />
+                    )}
+                    <CardTitle>
+                        {activeMetric === 'revenue' ? 'Revenue Overview' : 'Order Overview'}
+                    </CardTitle>
+                </div>
+                <CardDescription className="flex items-center gap-2 mt-2">
+                    <span className="hidden @[540px]/card:block font-medium text-base">
+                        {activeMetric === 'revenue'
+                            ? `Total revenue: ${formatCurrency(totalStats.totalRevenue)}`
+                            : `Total orders: ${totalStats.totalOrders.toLocaleString()}`
+                        }
+                    </span>
                     <span className="@[540px]/card:hidden">
-            {timeRange === '90d' ? 'Last 3 months' :
-                timeRange === '30d' ? 'Last 30 days' : 'Last 7 days'}
-          </span>
+                        {timeRange === '90d' ? 'Last 3 months' :
+                            timeRange === '30d' ? 'Last 30 days' : 'Last 7 days'}
+                    </span>
+                    {trend >= 0 ? (
+                        <TrendingUp className="h-4 w-4 text-green-600" />
+                    ) : (
+                        <TrendingDown className="h-4 w-4 text-red-600" />
+                    )}
                 </CardDescription>
-                <CardAction>
-                    <div className="flex items-center gap-2">
+                <CardAction className={"pt-4"}>
+                    <div className="flex items-center gap-2 flex-wrap">
                         <ToggleGroup
                             type="single"
                             value={activeMetric}
                             onValueChange={(value) => value && setActiveMetric(value as "orders" | "revenue")}
                             variant="outline"
-                            className="mr-2"
+                            className="mr-2 border rounded-lg p-1 bg-background/50"
                         >
-                            <ToggleGroupItem value="revenue" size="sm">
+                            <ToggleGroupItem value="revenue" size="sm" className="gap-1.5">
+                                <DollarSign className="h-3.5 w-3.5" />
                                 Revenue
                             </ToggleGroupItem>
-                            <ToggleGroupItem value="orders" size="sm">
+                            <ToggleGroupItem value="orders" size="sm" className="gap-1.5">
+                                <ShoppingBag className="h-3.5 w-3.5" />
                                 Orders
                             </ToggleGroupItem>
                         </ToggleGroup>
@@ -245,7 +244,7 @@ export function ChartAreaInteractive() {
                             value={timeRange}
                             onValueChange={setTimeRange}
                             variant="outline"
-                            className="hidden *:data-[slot=toggle-group-item]:!px-3 @[767px]/card:flex"
+                            className="hidden *:data-[slot=toggle-group-item]:!px-3 @[767px]/card:flex border rounded-lg p-1 bg-background/50"
                         >
                             <ToggleGroupItem value="90d">3M</ToggleGroupItem>
                             <ToggleGroupItem value="30d">30D</ToggleGroupItem>
@@ -258,7 +257,7 @@ export function ChartAreaInteractive() {
                                 size="sm"
                                 aria-label="Select time range"
                             >
-                                <SelectValue placeholder="Last 3 months"/>
+                                <SelectValue placeholder="Last 3 months" />
                             </SelectTrigger>
                             <SelectContent className="rounded-xl">
                                 <SelectItem value="90d" className="rounded-lg">
@@ -278,111 +277,145 @@ export function ChartAreaInteractive() {
             <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
                 <ChartContainer
                     config={chartConfig}
-                    className="aspect-auto h-[250px] w-full"
+                    className="aspect-auto h-[300px] w-full"
                 >
-                    <AreaChart data={filteredData}>
-                        <defs>
-                            <linearGradient id="fillOrders" x1="0" y1="0" x2="0" y2="1">
-                                <stop
-                                    offset="5%"
-                                    stopColor="var(--color-orders)"
-                                    stopOpacity={1.0}
-                                />
-                                <stop
-                                    offset="95%"
-                                    stopColor="var(--color-orders)"
-                                    stopOpacity={0.1}
-                                />
-                            </linearGradient>
-                            <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
-                                <stop
-                                    offset="5%"
-                                    stopColor="var(--color-revenue)"
-                                    stopOpacity={0.8}
-                                />
-                                <stop
-                                    offset="95%"
-                                    stopColor="var(--color-revenue)"
-                                    stopOpacity={0.1}
-                                />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid vertical={false}/>
-                        <XAxis
-                            dataKey="date"
-                            tickLine={false}
-                            axisLine={false}
-                            tickMargin={8}
-                            minTickGap={32}
-                            tickFormatter={(value) => {
-                                const date = new Date(value)
-                                if (timeRange === '7d') {
-                                    return date.toLocaleDateString("en-US", {
-                                        weekday: "short",
-                                    })
-                                }
-                                return date.toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                })
-                            }}
-                        />
-                        <ChartTooltip
-                            cursor={false}
-                            content={
-                                <ChartTooltipContent
-                                    labelFormatter={(value) => {
-                                        return new Date(value).toLocaleDateString("en-US", {
-                                            month: "short",
-                                            day: "numeric",
-                                            year: "numeric"
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={filteredData}>
+                            <defs>
+                                <linearGradient id="fillOrders" x1="0" y1="0" x2="0" y2="1">
+                                    <stop
+                                        offset="5%"
+                                        stopColor="var(--color-orders)"
+                                        stopOpacity={0.8}
+                                    />
+                                    <stop
+                                        offset="95%"
+                                        stopColor="var(--color-orders)"
+                                        stopOpacity={0.1}
+                                    />
+                                </linearGradient>
+                                <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
+                                    <stop
+                                        offset="5%"
+                                        stopColor="var(--color-revenue)"
+                                        stopOpacity={0.8}
+                                    />
+                                    <stop
+                                        offset="95%"
+                                        stopColor="var(--color-revenue)"
+                                        stopOpacity={0.1}
+                                    />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="stroke-muted" vertical={false} />
+                            <XAxis
+                                dataKey="date"
+                                tickLine={false}
+                                axisLine={false}
+                                tickMargin={8}
+                                minTickGap={32}
+                                tick={{ fill: 'currentColor', className: 'fill-muted-foreground text-xs' }}
+                                tickFormatter={(value) => {
+                                    const date = new Date(value)
+                                    if (timeRange === '7d') {
+                                        return date.toLocaleDateString("en-US", {
+                                            weekday: "short",
                                         })
-                                    }}
-                                    indicator="dot"
-                                    formatter={(value, name) => {
-                                        if (name === 'revenue') {
-                                            return [formatCurrency(Number(value)), 'Revenue']
-                                        }
-                                        return [value, 'Orders']
-                                    }}
+                                    }
+                                    return date.toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                    })
+                                }}
+                            />
+                            <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                tickMargin={8}
+                                tick={{ fill: 'currentColor', className: 'fill-muted-foreground text-xs' }}
+                                tickFormatter={(value) => {
+                                    if (activeMetric === 'revenue') {
+                                        return `$${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`
+                                    }
+                                    return value.toString()
+                                }}
+                            />
+                            <ChartTooltip
+                                cursor={{ strokeDasharray: '3 3' }}
+                                content={
+                                    <ChartTooltipContent
+                                        labelFormatter={(value) => {
+                                            return new Date(value).toLocaleDateString("en-US", {
+                                                month: "short",
+                                                day: "numeric",
+                                                year: "numeric"
+                                            })
+                                        }}
+                                        indicator="dot"
+                                        formatter={(value, name) => {
+                                            if (name === 'revenue') {
+                                                return [formatCurrency(Number(value)), 'Revenue']
+                                            }
+                                            return [value, 'Orders']
+                                        }}
+                                    />
+                                }
+                            />
+                            {activeMetric === 'revenue' ? (
+                                <Area
+                                    dataKey="revenue"
+                                    type="monotone"
+                                    fill="url(#fillRevenue)"
+                                    stroke="var(--color-revenue)"
+                                    strokeWidth={2}
                                 />
-                            }
-                        />
-                        {activeMetric === 'revenue' ? (
-                            <Area
-                                dataKey="revenue"
-                                type="monotone"
-                                fill="url(#fillRevenue)"
-                                stroke="var(--color-revenue)"
-                                strokeWidth={2}
-                            />
-                        ) : (
-                            <Area
-                                dataKey="orders"
-                                type="monotone"
-                                fill="url(#fillOrders)"
-                                stroke="var(--color-orders)"
-                                strokeWidth={2}
-                            />
-                        )}
-                    </AreaChart>
+                            ) : (
+                                <Area
+                                    dataKey="orders"
+                                    type="monotone"
+                                    fill="url(#fillOrders)"
+                                    stroke="var(--color-orders)"
+                                    strokeWidth={2}
+                                />
+                            )}
+                        </AreaChart>
+                    </ResponsiveContainer>
                 </ChartContainer>
-                <div className="mt-4 flex items-center justify-between text-sm">
-                    <div>
-                        <span className="text-muted-foreground">Trend: </span>
-                        <span className={trend >= 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-              {trend >= 0 ? '+' : ''}{trend.toFixed(1)}%
-            </span>
+
+                {/* 统计信息卡片 */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Trend</p>
+                            <p className={`text-2xl font-bold ${trend >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {trend >= 0 ? '+' : ''}{trend.toFixed(1)}%
+                            </p>
+                        </div>
+                        {trend >= 0 ? (
+                            <TrendingUp className="h-8 w-8 text-green-600" />
+                        ) : (
+                            <TrendingDown className="h-8 w-8 text-red-600" />
+                        )}
                     </div>
-                    <div className="flex gap-4">
-                        <div className="flex items-center gap-2">
-                            <div className="h-2 w-4 rounded-sm bg-[var(--color-revenue)]"></div>
-                            <span className="text-muted-foreground">Revenue</span>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-card">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Total Revenue</p>
+                            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                                {formatCurrency(totalStats.totalRevenue)}
+                            </p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="h-2 w-4 rounded-sm bg-[var(--color-orders)]"></div>
-                            <span className="text-muted-foreground">Orders</span>
+                        <DollarSign className="h-8 w-8 text-blue-600" />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-br from-green-50 to-white dark:from-green-950/20 dark:to-card">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Total Orders</p>
+                            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                                {totalStats.totalOrders.toLocaleString()}
+                            </p>
                         </div>
+                        <ShoppingBag className="h-8 w-8 text-green-600" />
                     </div>
                 </div>
             </CardContent>

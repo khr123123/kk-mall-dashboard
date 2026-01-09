@@ -1,29 +1,38 @@
-// about.jsx
 "use client"
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {useEffect, useState} from "react"
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs"
+import {Skeleton} from "@/components/ui/skeleton"
+import {Badge} from "@/components/ui/badge"
 import {
-    BarChart,
-    PieChart,
-    LineChart,
-    CartesianGrid,
-    XAxis,
-    YAxis,
-    Tooltip,
-    Legend,
+    Area,
+    AreaChart,
     Bar,
-    Pie,
+    BarChart,
+    CartesianGrid,
     Cell,
-    Line
+    Legend,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
 } from "recharts"
+import pb from "@/lib/pocketbase.ts"
 import {
-    ChartContainer,
-    ChartTooltip,
-    ChartTooltipContent,
-    type ChartConfig,
-} from "@/components/ui/chart"
+    AlertTriangle,
+    Award,
+    DollarSign,
+    FolderTree,
+    Package,
+    ShoppingCart,
+    Star,
+    Tag,
+    TrendingUp,
+    Users
+} from "lucide-react"
 
 export default function ChartPage() {
     const [stats, setStats] = useState({
@@ -33,7 +42,9 @@ export default function ChartPage() {
         totalOrders: 0,
         totalUsers: 0,
         averageRating: 0,
-        outOfStockCount: 0
+        outOfStockCount: 0,
+        averagePrice: 0,
+        stockRate: 0
     })
 
     const [brandDistribution, setBrandDistribution] = useState([])
@@ -52,14 +63,12 @@ export default function ChartPage() {
         try {
             setLoading(true)
 
-            // 并行获取所有数据
             const [
                 products,
                 brands,
                 categories,
                 orders,
                 users,
-                flashSales,
                 favorites
             ] = await Promise.all([
                 pb.collection('products').getFullList(),
@@ -67,11 +76,12 @@ export default function ChartPage() {
                 pb.collection('category').getFullList(),
                 pb.collection('orders').getFullList(),
                 pb.collection('users').getFullList(),
-                pb.collection('flash_sales').getFullList(),
                 pb.collection('favorites').getFullList()
             ])
 
-            // 计算基本统计数据
+            const totalPrice = products.reduce((sum, p) => sum + (p.price || 0), 0)
+            const avgPrice = products.length > 0 ? totalPrice / products.length : 0
+
             const calculatedStats = {
                 totalProducts: products.length,
                 totalBrands: brands.length,
@@ -79,25 +89,16 @@ export default function ChartPage() {
                 totalOrders: orders.length,
                 totalUsers: users.length,
                 averageRating: products.reduce((sum, product) => sum + (product.rating || 0), 0) / products.length || 0,
-                outOfStockCount: products.filter(p => !p.inStock || p.stock <= 0).length
+                outOfStockCount: products.filter(p => !p.inStock || p.stock <= 0).length,
+                averagePrice: avgPrice,
+                stockRate: products.length > 0 ? ((products.length - products.filter(p => !p.inStock || p.stock <= 0).length) / products.length * 100) : 0
             }
 
-            // 品牌分布数据
             const brandData = await calculateBrandDistribution(brands, products)
-
-            // 分类分布数据
             const categoryData = await calculateCategoryDistribution(categories, products)
-
-            // 销售趋势数据
             const salesData = calculateSalesTrend(orders)
-
-            // 库存状态数据
             const stockData = calculateStockStatus(products)
-
-            // 价格分布数据
             const priceData = calculatePriceRangeDistribution(products)
-
-            // 热门商品数据
             const topProductsData = calculateTopProducts(products, favorites)
 
             setStats(calculatedStats)
@@ -116,7 +117,6 @@ export default function ChartPage() {
     }
 
     const calculateBrandDistribution = async (brands, products) => {
-        // 统计每个品牌的商品数量
         const brandMap = new Map()
 
         brands.forEach(brand => {
@@ -128,40 +128,31 @@ export default function ChartPage() {
             })
         })
 
-        // 转换为图表数据格式
         return Array.from(brandMap.values())
             .sort((a, b) => b.count - a.count)
-            .slice(0, 8) // 只显示前8个品牌
+            .slice(0, 10)
             .map(item => ({
                 name: item.name,
                 value: item.count,
-                logo: brands.find(b => b.name === item.name)?.logo
+                products: item.count
             }))
     }
 
     const calculateCategoryDistribution = async (categories, products) => {
-        // 这里需要递归处理分类层级，简化版本只统计一级分类
         const topCategories = categories.filter(cat => !cat.parent || cat.parent.length === 0)
 
         return topCategories.map(category => {
-            // 统计该分类下的商品数量（包括子分类）
-            const categoryProducts = products.filter(p => {
-                // 这里需要根据实际的数据结构来匹配
-                // 简化处理：假设每个商品有category_id字段
-                return p.category_id === category.id
-            })
+            const categoryProducts = products.filter(p => p.category_id === category.id)
 
             return {
                 name: category.name,
-                value: categoryProducts.length,
-                icon: category.icon
+                value: categoryProducts.length
             }
-        }).sort((a, b) => b.value - a.value)
+        }).sort((a, b) => b.value - a.value).slice(0, 8)
     }
 
     const calculateSalesTrend = (orders) => {
-        // 统计最近30天的销售趋势
-        const last30Days = Array.from({ length: 30 }, (_, i) => {
+        const last30Days = Array.from({length: 30}, (_, i) => {
             const date = new Date()
             date.setDate(date.getDate() - (29 - i))
             return {
@@ -186,24 +177,22 @@ export default function ChartPage() {
     }
 
     const calculateStockStatus = (products) => {
-        const statusCount = {
-            "库存充足": products.filter(p => p.stock > 20).length,
-            "库存紧张": products.filter(p => p.stock > 0 && p.stock <= 20).length,
-            "缺货": products.filter(p => p.stock <= 0).length,
-            "新品": products.filter(p => p.isNew).length,
-            "热销": products.filter(p => p.isHot).length
-        }
-
-        return Object.entries(statusCount).map(([name, value]) => ({ name, value }))
+        return [
+            {name: "库存充足", value: products.filter(p => p.stock > 20).length, color: "#10b981"},
+            {name: "库存紧张", value: products.filter(p => p.stock > 0 && p.stock <= 20).length, color: "#f59e0b"},
+            {name: "缺货", value: products.filter(p => p.stock <= 0).length, color: "#ef4444"},
+            {name: "新品", value: products.filter(p => p.isNew).length, color: "#8b5cf6"},
+            {name: "热销", value: products.filter(p => p.isHot).length, color: "#ec4899"}
+        ]
     }
 
     const calculatePriceRangeDistribution = (products) => {
         const ranges = [
-            { range: "¥0-¥100", min: 0, max: 100 },
-            { range: "¥100-¥500", min: 100, max: 500 },
-            { range: "¥500-¥1000", min: 500, max: 1000 },
-            { range: "¥1000-¥2000", min: 1000, max: 2000 },
-            { range: "¥2000+", min: 2000, max: Infinity }
+            {range: "¥0-¥100", min: 0, max: 100},
+            {range: "¥100-¥500", min: 100, max: 500},
+            {range: "¥500-¥1000", min: 500, max: 1000},
+            {range: "¥1000-¥2000", min: 1000, max: 2000},
+            {range: "¥2000+", min: 2000, max: Infinity}
         ]
 
         return ranges.map(range => {
@@ -220,7 +209,6 @@ export default function ChartPage() {
     }
 
     const calculateTopProducts = (products, favorites) => {
-        // 综合评分、收藏数、库存等因素计算热门商品
         return products
             .map(product => {
                 const productFavorites = favorites.filter(fav =>
@@ -228,10 +216,10 @@ export default function ChartPage() {
                 ).length
 
                 const score = (
-                    (product.rating || 0) * 2 + // 评分权重
-                    productFavorites * 0.5 +     // 收藏数权重
-                    (product.isHot ? 10 : 0) +   // 热销标签权重
-                    (product.isNew ? 5 : 0)      // 新品标签权重
+                    (product.rating || 0) * 2 +
+                    productFavorites * 0.5 +
+                    (product.isHot ? 10 : 0) +
+                    (product.isNew ? 5 : 0)
                 )
 
                 return {
@@ -248,56 +236,18 @@ export default function ChartPage() {
             .slice(0, 10)
     }
 
-    // 图表配置
-    const brandChartConfig = {
-        brands: {
-            label: "商品数量",
-            color: "hsl(var(--primary))",
-        }
-    } satisfies ChartConfig
-
-    const categoryChartConfig = {
-        categories: {
-            label: "分类商品数",
-            color: "hsl(var(--chart-2))",
-        }
-    } satisfies ChartConfig
-
-    const salesChartConfig = {
-        orders: {
-            label: "订单数",
-            color: "hsl(var(--chart-1))",
-        },
-        revenue: {
-            label: "销售额",
-            color: "hsl(var(--chart-3))",
-        }
-    } satisfies ChartConfig
-
-    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
 
     if (loading) {
         return (
-            <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    {[...Array(7)].map((_, i) => (
+            <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[...Array(8)].map((_, i) => (
                         <Card key={i}>
-                            <CardHeader className="pb-2">
-                                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/2"></div>
-                                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-3/4 mt-2"></div>
+                            <CardHeader className="pb-3">
+                                <Skeleton className="h-4 w-1/2"/>
+                                <Skeleton className="h-8 w-3/4 mt-2"/>
                             </CardHeader>
-                        </Card>
-                    ))}
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {[...Array(4)].map((_, i) => (
-                        <Card key={i} className="h-80">
-                            <CardHeader>
-                                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-1/3"></div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="h-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
-                            </CardContent>
                         </Card>
                     ))}
                 </div>
@@ -306,49 +256,82 @@ export default function ChartPage() {
     }
 
     return (
-        <div className="p-6">
+        <div className="p-6 space-y-6">
+            {/* 页面标题 */}
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">数据分析中心</h1>
+                <p className="text-muted-foreground mt-1">全面了解您的业务数据和趋势</p>
+            </div>
+
             {/* 统计卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>商品总数</CardDescription>
-                        <CardTitle className="text-3xl font-bold">{stats.totalProducts.toLocaleString()}</CardTitle>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card
+                    className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-card border-blue-100 dark:border-blue-900">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardDescription className="text-blue-600 dark:text-blue-400">商品总数</CardDescription>
+                            <Package className="h-5 w-5 text-blue-600"/>
+                        </div>
+                        <CardTitle className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                            {stats.totalProducts.toLocaleString()}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <AlertTriangle className="h-4 w-4 text-orange-500"/>
                             缺货商品: {stats.outOfStockCount}个
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>品牌数量</CardDescription>
-                        <CardTitle className="text-3xl font-bold">{stats.totalBrands.toLocaleString()}</CardTitle>
+                <Card
+                    className="bg-gradient-to-br from-green-50 to-white dark:from-green-950/20 dark:to-card border-green-100 dark:border-green-900">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardDescription className="text-green-600 dark:text-green-400">品牌数量</CardDescription>
+                            <Tag className="h-5 w-5 text-green-600"/>
+                        </div>
+                        <CardTitle className="text-3xl font-bold text-green-700 dark:text-green-300">
+                            {stats.totalBrands.toLocaleString()}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <FolderTree className="h-4 w-4"/>
                             分类数量: {stats.totalCategories}个
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>订单总数</CardDescription>
-                        <CardTitle className="text-3xl font-bold">{stats.totalOrders.toLocaleString()}</CardTitle>
+                <Card
+                    className="bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-card border-purple-100 dark:border-purple-900">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardDescription className="text-purple-600 dark:text-purple-400">订单总数</CardDescription>
+                            <ShoppingCart className="h-5 w-5 text-purple-600"/>
+                        </div>
+                        <CardTitle className="text-3xl font-bold text-purple-700 dark:text-purple-300">
+                            {stats.totalOrders.toLocaleString()}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Users className="h-4 w-4"/>
                             用户总数: {stats.totalUsers.toLocaleString()}
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>平均评分</CardDescription>
-                        <CardTitle className="text-3xl font-bold">{stats.averageRating.toFixed(1)}</CardTitle>
+                <Card
+                    className="bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/20 dark:to-card border-orange-100 dark:border-orange-900">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardDescription className="text-orange-600 dark:text-orange-400">平均评分</CardDescription>
+                            <Star className="h-5 w-5 text-orange-600 fill-orange-600"/>
+                        </div>
+                        <CardTitle className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                            {stats.averageRating.toFixed(1)}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-sm text-muted-foreground">
@@ -357,28 +340,14 @@ export default function ChartPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>闪购活动</CardDescription>
-                        <CardTitle className="text-3xl font-bold">
-                            {(() => {
-                                const activeFlashSales = stats.totalProducts // 这里需要实际获取闪购数量
-                                return activeFlashSales.toLocaleString()
-                            })()}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-sm text-muted-foreground">
-                            进行中的促销活动
+                <Card className="bg-gradient-to-br from-pink-50 to-white dark:from-pink-950/20 dark:to-card">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardDescription className="text-pink-600 dark:text-pink-400">库存状态</CardDescription>
+                            <TrendingUp className="h-5 w-5 text-pink-600"/>
                         </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>库存状态</CardDescription>
-                        <CardTitle className="text-3xl font-bold">
-                            {((stats.totalProducts - stats.outOfStockCount) / stats.totalProducts * 100).toFixed(0)}%
+                        <CardTitle className="text-3xl font-bold text-pink-700 dark:text-pink-300">
+                            {stats.stockRate.toFixed(0)}%
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -388,19 +357,14 @@ export default function ChartPage() {
                     </CardContent>
                 </Card>
 
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardDescription>商品均价</CardDescription>
-                        <CardTitle className="text-3xl font-bold">
-                            ¥{(() => {
-                            const avgPrice = stats.totalProducts > 0 ?
-                                (() => {
-                                    // 这里需要实际计算平均价格
-                                    const totalPrice = 0 // 需要从数据计算
-                                    return Math.round(totalPrice / stats.totalProducts)
-                                })() : 0
-                            return avgPrice.toLocaleString()
-                        })()}
+                <Card className="bg-gradient-to-br from-cyan-50 to-white dark:from-cyan-950/20 dark:to-card">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardDescription className="text-cyan-600 dark:text-cyan-400">商品均价</CardDescription>
+                            <DollarSign className="h-5 w-5 text-cyan-600"/>
+                        </div>
+                        <CardTitle className="text-3xl font-bold text-cyan-700 dark:text-cyan-300">
+                            ¥{Math.round(stats.averagePrice).toLocaleString()}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -413,7 +377,7 @@ export default function ChartPage() {
 
             {/* 图表区域 */}
             <Tabs defaultValue="overview" className="space-y-6">
-                <TabsList>
+                <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
                     <TabsTrigger value="overview">概览</TabsTrigger>
                     <TabsTrigger value="sales">销售分析</TabsTrigger>
                     <TabsTrigger value="products">商品分析</TabsTrigger>
@@ -423,216 +387,256 @@ export default function ChartPage() {
                 <TabsContent value="overview" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* 品牌分布柱状图 */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>品牌商品分布</CardTitle>
-                                <CardDescription>各品牌商品数量统计</CardDescription>
+                        <Card className="shadow-lg">
+                            <CardHeader className="border-b">
+                                <div className="flex items-center gap-2">
+                                    <Tag className="h-5 w-5 text-primary"/>
+                                    <CardTitle>品牌商品分布</CardTitle>
+                                </div>
+                                <CardDescription>Top 10 品牌商品数量统计</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <ChartContainer config={brandChartConfig} className="h-80">
+                            <CardContent className="pt-6">
+                                <ResponsiveContainer width="100%" height={300}>
                                     <BarChart data={brandDistribution}>
-                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted"/>
                                         <XAxis
                                             dataKey="name"
                                             angle={-45}
                                             textAnchor="end"
-                                            height={60}
+                                            height={80}
+                                            tick={{fontSize: 12}}
                                         />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Legend />
+                                        <YAxis/>
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: 'hsl(var(--background))',
+                                                border: '1px solid hsl(var(--border))',
+                                                borderRadius: '8px'
+                                            }}
+                                        />
                                         <Bar
-                                            dataKey="value"
+                                            dataKey="products"
                                             name="商品数量"
-                                            fill="var(--color-brands)"
-                                            radius={[4, 4, 0, 0]}
+                                            fill={COLORS[0]}
+                                            radius={[8, 8, 0, 0]}
                                         />
                                     </BarChart>
-                                </ChartContainer>
+                                </ResponsiveContainer>
                             </CardContent>
                         </Card>
 
                         {/* 分类分布饼图 */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>分类商品分布</CardTitle>
+                        <Card className="shadow-lg">
+                            <CardHeader className="border-b">
+                                <div className="flex items-center gap-2">
+                                    <FolderTree className="h-5 w-5 text-primary"/>
+                                    <CardTitle>分类商品分布</CardTitle>
+                                </div>
                                 <CardDescription>各分类商品占比</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <div className="h-80 flex items-center justify-center">
-                                    <PieChart width={400} height={300}>
+                            <CardContent className="pt-6">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart>
                                         <Pie
                                             data={categoryDistribution}
                                             cx="50%"
                                             cy="50%"
                                             labelLine={false}
-                                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                            label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
                                             outerRadius={100}
                                             fill="#8884d8"
                                             dataKey="value"
                                         >
                                             {categoryDistribution.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]}/>
                                             ))}
                                         </Pie>
-                                        <Tooltip />
-                                        <Legend />
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: 'hsl(var(--background))',
+                                                border: '1px solid hsl(var(--border))',
+                                                borderRadius: '8px'
+                                            }}
+                                        />
                                     </PieChart>
-                                </div>
+                                </ResponsiveContainer>
                             </CardContent>
                         </Card>
                     </div>
 
                     {/* 销售趋势图 */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>销售趋势</CardTitle>
+                    <Card className="shadow-lg">
+                        <CardHeader className="border-b">
+                            <div className="flex items-center gap-2">
+                                <TrendingUp className="h-5 w-5 text-primary"/>
+                                <CardTitle>销售趋势</CardTitle>
+                            </div>
                             <CardDescription>最近30天销售数据</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <ChartContainer config={salesChartConfig} className="h-80">
-                                <LineChart data={salesTrend}>
-                                    <CartesianGrid strokeDasharray="3 3" />
+                        <CardContent className="pt-6">
+                            <ResponsiveContainer width="100%" height={350}>
+                                <AreaChart data={salesTrend}>
+                                    <defs>
+                                        <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0.1}/>
+                                        </linearGradient>
+                                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor={COLORS[1]} stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor={COLORS[1]} stopOpacity={0.1}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted"/>
                                     <XAxis
                                         dataKey="date"
                                         tickFormatter={(date) => {
                                             const d = new Date(date)
-                                            return `${d.getMonth()+1}/${d.getDate()}`
+                                            return `${d.getMonth() + 1}/${d.getDate()}`
+                                        }}
+                                        tick={{fontSize: 12}}
+                                    />
+                                    <YAxis yAxisId="left"/>
+                                    <YAxis yAxisId="right" orientation="right"/>
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: 'hsl(var(--background))',
+                                            border: '1px solid hsl(var(--border))',
+                                            borderRadius: '8px'
                                         }}
                                     />
-                                    <YAxis yAxisId="left" />
-                                    <YAxis yAxisId="right" orientation="right" />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Line
+                                    <Legend/>
+                                    <Area
                                         yAxisId="left"
                                         type="monotone"
                                         dataKey="orders"
-                                        stroke="var(--color-orders)"
+                                        stroke={COLORS[0]}
+                                        fillOpacity={1}
+                                        fill="url(#colorOrders)"
                                         name="订单数"
-                                        strokeWidth={2}
                                     />
-                                    <Line
+                                    <Area
                                         yAxisId="right"
                                         type="monotone"
                                         dataKey="revenue"
-                                        stroke="var(--color-revenue)"
+                                        stroke={COLORS[1]}
+                                        fillOpacity={1}
+                                        fill="url(#colorRevenue)"
                                         name="销售额"
-                                        strokeWidth={2}
                                     />
-                                </LineChart>
-                            </ChartContainer>
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </CardContent>
                     </Card>
                 </TabsContent>
 
                 <TabsContent value="sales" className="space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* 订单状态分布 */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>订单状态分布</CardTitle>
-                                <CardDescription>不同状态订单数量</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="h-80">
-                                    <BarChart
-                                        width={500}
-                                        height={300}
-                                        data={[]} // 需要从orders数据计算状态分布
-                                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                                    >
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="status" />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Legend />
-                                        <Bar dataKey="count" fill="#82ca9d" />
-                                    </BarChart>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* 价格分布 */}
-                        <Card>
-                            <CardHeader>
+                    <Card className="shadow-lg">
+                        <CardHeader className="border-b">
+                            <div className="flex items-center gap-2">
+                                <DollarSign className="h-5 w-5 text-primary"/>
                                 <CardTitle>商品价格分布</CardTitle>
-                                <CardDescription>不同价格区间商品数量</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ChartContainer config={brandChartConfig} className="h-80">
-                                    <BarChart data={priceRangeDistribution}>
-                                        <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="name" />
-                                        <YAxis />
-                                        <Tooltip />
-                                        <Bar
-                                            dataKey="count"
-                                            fill="var(--color-brands)"
-                                            radius={[4, 4, 0, 0]}
-                                        />
-                                    </BarChart>
-                                </ChartContainer>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            </div>
+                            <CardDescription>不同价格区间商品数量</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <ResponsiveContainer width="100%" height={350}>
+                                <BarChart data={priceRangeDistribution}>
+                                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted"/>
+                                    <XAxis dataKey="name"/>
+                                    <YAxis/>
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: 'hsl(var(--background))',
+                                            border: '1px solid hsl(var(--border))',
+                                            borderRadius: '8px'
+                                        }}
+                                    />
+                                    <Bar
+                                        dataKey="count"
+                                        name="商品数量"
+                                        fill={COLORS[2]}
+                                        radius={[8, 8, 0, 0]}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 <TabsContent value="products" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* 库存状态 */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>库存状态分析</CardTitle>
+                        <Card className="shadow-lg">
+                            <CardHeader className="border-b">
+                                <div className="flex items-center gap-2">
+                                    <Package className="h-5 w-5 text-primary"/>
+                                    <CardTitle>库存状态分析</CardTitle>
+                                </div>
                                 <CardDescription>商品库存分布情况</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <div className="h-80">
-                                    <PieChart width={400} height={300}>
+                            <CardContent className="pt-6">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart>
                                         <Pie
                                             data={stockStatus}
                                             cx="50%"
                                             cy="50%"
                                             labelLine={false}
-                                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                            label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
                                             outerRadius={100}
-                                            fill="#8884d8"
                                             dataKey="value"
                                         >
                                             {stockStatus.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                <Cell key={`cell-${index}`}
+                                                      fill={entry.color || COLORS[index % COLORS.length]}/>
                                             ))}
                                         </Pie>
-                                        <Tooltip />
-                                        <Legend />
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: 'hsl(var(--background))',
+                                                border: '1px solid hsl(var(--border))',
+                                                borderRadius: '8px'
+                                            }}
+                                        />
                                     </PieChart>
-                                </div>
+                                </ResponsiveContainer>
                             </CardContent>
                         </Card>
 
                         {/* 热门商品 */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>热门商品排行</CardTitle>
-                                <CardDescription>基于评分、收藏等综合评分</CardDescription>
+                        <Card className="shadow-lg">
+                            <CardHeader className="border-b">
+                                <div className="flex items-center gap-2">
+                                    <Award className="h-5 w-5 text-primary"/>
+                                    <CardTitle>热门商品排行</CardTitle>
+                                </div>
+                                <CardDescription>基于评分、收藏等综合评分 Top 10</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
+                            <CardContent className="pt-6">
+                                <div className="space-y-3 max-h-[300px] overflow-y-auto">
                                     {topProducts.map((product, index) => (
-                                        <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground">
+                                        <div key={product.id}
+                                             className="flex items-center justify-between p-3 rounded-lg border hover:shadow-md transition-shadow bg-gradient-to-r from-background to-accent/5">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <Badge
+                                                    className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-base font-bold">
                                                     {index + 1}
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">{product.name}</div>
-                                                    <div className="text-sm text-muted-foreground">
-                                                        评分: {product.rating} | 收藏: {product.favorites}
+                                                </Badge>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="font-medium truncate">{product.name}</div>
+                                                    <div
+                                                        className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                                                        <span className="flex items-center gap-1">
+                                                            <Star className="h-3 w-3 fill-orange-400 text-orange-400"/>
+                                                            {product.rating.toFixed(1)}
+                                                        </span>
+                                                        <span>❤️ {product.favorites}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <div className="font-medium">¥{product.price}</div>
+                                            <div className="text-right flex-shrink-0 ml-4">
+                                                <div
+                                                    className="font-bold text-primary">¥{product.price.toLocaleString()}</div>
                                                 <div className="text-sm text-muted-foreground">
                                                     库存: {product.stock}
                                                 </div>
@@ -646,40 +650,45 @@ export default function ChartPage() {
                 </TabsContent>
 
                 <TabsContent value="brands" className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>品牌详细分析</CardTitle>
+                    <Card className="shadow-lg">
+                        <CardHeader className="border-b">
+                            <div className="flex items-center gap-2">
+                                <Tag className="h-5 w-5 text-primary"/>
+                                <CardTitle>品牌详细分析</CardTitle>
+                            </div>
                             <CardDescription>各品牌商品统计与比较</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                    <tr className="border-b">
-                                        <th className="text-left p-3">品牌</th>
-                                        <th className="text-left p-3">商品数量</th>
-                                        <th className="text-left p-3">平均价格</th>
-                                        <th className="text-left p-3">平均评分</th>
-                                        <th className="text-left p-3">缺货商品</th>
-                                        <th className="text-left p-3">新品数量</th>
-                                        <th className="text-left p-3">热销商品</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {/* 这里可以添加品牌详细数据 */}
-                                    {brandDistribution.map((brand, index) => (
-                                        <tr key={index} className="border-b hover:bg-muted/50">
-                                            <td className="p-3">{brand.name}</td>
-                                            <td className="p-3">{brand.value}</td>
-                                            <td className="p-3">¥--</td>
-                                            <td className="p-3">--</td>
-                                            <td className="p-3">--</td>
-                                            <td className="p-3">--</td>
-                                            <td className="p-3">--</td>
+                        <CardContent className="pt-6">
+                            <div className="rounded-lg border overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-muted/50">
+                                        <tr className="border-b">
+                                            <th className="text-left p-4 font-semibold">品牌</th>
+                                            <th className="text-left p-4 font-semibold">商品数量</th>
+                                            <th className="text-left p-4 font-semibold">占比</th>
                                         </tr>
-                                    ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                        {brandDistribution.map((brand, index) => (
+                                            <tr key={index} className="border-b hover:bg-muted/50 transition-colors">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="outline">{index + 1}</Badge>
+                                                        <span className="font-medium">{brand.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">{brand.value}</td>
+                                                <td className="p-4">
+                                                    <Badge variant="secondary">
+                                                        {((brand.value / stats.totalProducts) * 100).toFixed(1)}%
+                                                    </Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
