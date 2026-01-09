@@ -25,7 +25,7 @@ import {format} from "date-fns"
 import {toast} from "sonner"
 import {Button} from "@/components/ui/button"
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from "@/components/ui/table"
-import {Card, CardContent, CardDescription, CardHeader, CardTitle,} from "@/components/ui/card"
+import {Card, CardContent,} from "@/components/ui/card"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select"
 import {Input} from "@/components/ui/input"
 import {Skeleton} from "@/components/ui/skeleton"
@@ -545,20 +545,7 @@ const OrderConsolePage = () => {
 
     return (
         <div className="p-6 space-y-6">
-            {/* Page Header */}
-            <div>
-                <h1 className="text-3xl font-bold mb-2">Order Management</h1>
-                <p className="text-muted-foreground">
-                    Total {orders.length} orders
-                </p>
-            </div>
-
-            {/* Filters */}
             <Card>
-                <CardHeader>
-                    <CardTitle>Filters</CardTitle>
-                    <CardDescription>Filter by order status and order number</CardDescription>
-                </CardHeader>
                 <CardContent>
                     <div className="flex gap-4">
                         <Select
@@ -592,11 +579,7 @@ const OrderConsolePage = () => {
                         />
                     </div>
                 </CardContent>
-            </Card>
-
-            {/* Table */}
-            <Card>
-                <CardContent className="p-0">
+                <CardContent>
                     <div className="overflow-hidden rounded-lg border">
                         <Table>
                             <TableHeader className="bg-muted sticky top-0 z-10">
