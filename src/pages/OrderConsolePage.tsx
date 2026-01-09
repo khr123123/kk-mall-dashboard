@@ -1,34 +1,25 @@
-// pages/OrderConsolePage.tsx
+// pages/OrderManagementPage.tsx
 import {useEffect, useRef, useState} from "react"
 import {
-    IconChevronLeft,
-    IconChevronRight,
-    IconChevronsLeft,
-    IconChevronsRight,
+    IconCircleCheckFilled,
+    IconClock,
+    IconCopy,
+    IconDotsVertical,
     IconEdit,
     IconEye,
-    IconPackage,
+    IconLoader,
+    IconTrash,
+    IconTruck,
+    IconX,
 } from "@tabler/icons-react"
-import {
-    type ColumnDef,
-    type ColumnFiltersState,
-    flexRender,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getPaginationRowModel,
-    getSortedRowModel,
-    type SortingState,
-    useReactTable,
-    type VisibilityState,
-} from "@tanstack/react-table"
+import {type ColumnDef} from "@tanstack/react-table"
 import {format} from "date-fns"
 import {toast} from "sonner"
+
 import {Button} from "@/components/ui/button"
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from "@/components/ui/table"
-import {Card, CardContent,} from "@/components/ui/card"
+import {Card, CardContent} from "@/components/ui/card"
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select"
 import {Input} from "@/components/ui/input"
-import {Skeleton} from "@/components/ui/skeleton"
 import {
     Dialog,
     DialogContent,
@@ -37,13 +28,21 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {ScrollArea} from "@/components/ui/scroll-area"
 import {Separator} from "@/components/ui/separator"
 import {Badge} from "@/components/ui/badge"
 import {Label} from "@/components/ui/label"
-import {Checkbox} from "@/components/ui/checkbox"
+import {DataTableGeneric, StatusBadge} from "@/components/data-table-generic"
 import pb from "@/lib/pocketbase"
 
+// Types
 export type OrderStatus = "pending" | "processing" | "shipped" | "delivered" | "cancelled"
 
 export interface Product {
@@ -99,18 +98,38 @@ export interface OrderListResponse {
 }
 
 // Status Configuration
-const statusConfig: Record<
-    OrderStatus,
+const statusConfig: Record<OrderStatus,
     {
         label: string
         variant: "default" | "secondary" | "destructive" | "outline"
+        icon: React.ReactNode
     }
 > = {
-    pending: {label: "Pending Payment", variant: "outline"},
-    processing: {label: "Processing", variant: "secondary"},
-    shipped: {label: "Shipped", variant: "default"},
-    delivered: {label: "Delivered", variant: "default"},
-    cancelled: {label: "Cancelled", variant: "destructive"},
+    pending: {
+        label: "Pending",
+        variant: "outline",
+        icon: <IconClock className="w-3 h-3"/>,
+    },
+    processing: {
+        label: "Processing",
+        variant: "outline",
+        icon: <IconLoader className="w-3 h-3"/>,
+    },
+    shipped: {
+        label: "Shipped",
+        variant: "outline",
+        icon: <IconTruck className="w-3 h-3"/>,
+    },
+    delivered: {
+        label: "Done",
+        variant: "outline",
+        icon: <IconCircleCheckFilled className="w-3 h-3 fill-green-500 dark:fill-green-400"/>,
+    },
+    cancelled: {
+        label: "Cancelled",
+        variant: "outline",
+        icon: <IconX className="w-3 h-3"/>,
+    },
 }
 
 const statusOptions: { value: OrderStatus; label: string }[] = [
@@ -122,14 +141,8 @@ const statusOptions: { value: OrderStatus; label: string }[] = [
 ]
 
 // Order Status Badge Component
-function OrderStatusBadge({status}: { status: OrderStatus }) {
-    const config = statusConfig[status]
-    return (
-        <Badge variant={config.variant} className="font-medium">
-            {config.label}
-        </Badge>
-    )
-}
+const OrderStatusBadge = ({status}: { status: OrderStatus }) => <StatusBadge config={statusConfig[status]}/>
+
 
 // Order Detail Dialog Component
 interface OrderDetailDialogProps {
@@ -138,19 +151,19 @@ interface OrderDetailDialogProps {
     onOpenChange: (open: boolean) => void
 }
 
-function OrderDetailDialog({order, open, onOpenChange}: OrderDetailDialogProps) {
+const OrderDetailDialog = ({order, open, onOpenChange}: OrderDetailDialogProps) => {
     if (!order) return null
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-3xl max-h-[80vh]">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center">
-                        <span className={"mr-2"}>Order Details</span>
+                    <DialogTitle className="flex items-center gap-2">
+                        <span>Order Details</span>
                         <OrderStatusBadge status={order.status}/>
                     </DialogTitle>
                     <DialogDescription>
-                        View complete information for this order
+                        Complete information for order #{order.order_number}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -159,29 +172,33 @@ function OrderDetailDialog({order, open, onOpenChange}: OrderDetailDialogProps) 
                         {/* Order Information */}
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                                <p className="text-muted-foreground">Order Number</p>
+                                <p className="text-muted-foreground mb-1">Order Number</p>
                                 <p className="font-medium">{order.order_number}</p>
                             </div>
                             <div>
-                                <p className="text-muted-foreground">Order Date</p>
+                                <p className="text-muted-foreground mb-1">Order Date</p>
                                 <p className="font-medium">
                                     {format(new Date(order.order_date), "yyyy-MM-dd HH:mm:ss")}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-muted-foreground">Payment Method</p>
+                                <p className="text-muted-foreground mb-1">Payment Method</p>
                                 <p className="font-medium capitalize">{order.payment_method}</p>
                             </div>
                             <div>
-                                <p className="text-muted-foreground">Payment ID</p>
+                                <p className="text-muted-foreground mb-1">Payment ID</p>
                                 <p className="font-medium">{order.payment_id || "-"}</p>
                             </div>
                             {order.tracking_number && (
                                 <div className="col-span-2">
-                                    <p className="text-muted-foreground">Tracking Number</p>
+                                    <p className="text-muted-foreground mb-1">Tracking Number</p>
                                     <p className="font-medium">{order.tracking_number}</p>
                                 </div>
                             )}
+                            <div className="col-span-2">
+                                <p className="text-muted-foreground mb-1">Shipping Address</p>
+                                <p className="font-medium">{order.address}</p>
+                            </div>
                         </div>
 
                         <Separator/>
@@ -189,7 +206,7 @@ function OrderDetailDialog({order, open, onOpenChange}: OrderDetailDialogProps) 
                         {/* Items List */}
                         <div>
                             <h3 className="font-semibold mb-4">
-                                Items ({order.items_count} items)
+                                Order Items ({order.items_count} items)
                             </h3>
                             <div className="space-y-4">
                                 {order.items.map((item) => (
@@ -206,7 +223,7 @@ function OrderDetailDialog({order, open, onOpenChange}: OrderDetailDialogProps) 
 
                                             {/* SKU Specs */}
                                             {item.skuInfo && Object.keys(item.skuInfo.specs).length > 0 && (
-                                                <div className="flex gap-2 mb-2">
+                                                <div className="flex gap-2 mb-2 flex-wrap">
                                                     {Object.entries(item.skuInfo.specs).map(([key, value]) => (
                                                         <Badge key={key} variant="outline" className="text-xs">
                                                             {key}: {value}
@@ -235,10 +252,7 @@ function OrderDetailDialog({order, open, onOpenChange}: OrderDetailDialogProps) 
                                 ))}
                             </div>
                         </div>
-
                         <Separator/>
-
-                        {/* Total */}
                         <div className="flex justify-end">
                             <div className="text-right">
                                 <p className="text-muted-foreground mb-1">Total Amount</p>
@@ -262,12 +276,7 @@ interface UpdateOrderDialogProps {
     onSuccess: () => void
 }
 
-function UpdateOrderDialog({
-                               order,
-                               open,
-                               onOpenChange,
-                               onSuccess,
-                           }: UpdateOrderDialogProps) {
+const UpdateOrderDialog = ({order, open, onOpenChange, onSuccess,}: UpdateOrderDialogProps) => {
     const [status, setStatus] = useState<OrderStatus>(order.status)
     const [trackingNumber, setTrackingNumber] = useState(order.tracking_number || "")
     const [loading, setLoading] = useState(false)
@@ -357,18 +366,10 @@ function UpdateOrderDialog({
     )
 }
 
-// Main Order Console Page
-const OrderConsolePage = () => {
+// Main Order Management Page
+const OrderManagementPage = () => {
     const [orders, setOrders] = useState<Order[]>([])
     const [loading, setLoading] = useState(true)
-    const [rowSelection, setRowSelection] = useState({})
-    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-    const [sorting, setSorting] = useState<SortingState>([])
-    const [pagination, setPagination] = useState({
-        pageIndex: 0,
-        pageSize: 10,
-    })
 
     // Filters
     const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all")
@@ -380,7 +381,6 @@ const OrderConsolePage = () => {
     const [detailDialogOpen, setDetailDialogOpen] = useState(false)
 
     // Fetch orders
-    const lastQueryKey = useRef<string>("")
     const fetchOrders = async () => {
         setLoading(true)
         try {
@@ -394,14 +394,10 @@ const OrderConsolePage = () => {
 
             const filterString = filters.length > 0 ? filters.join(" && ") : ""
 
-            const result: OrderListResponse = await pb.collection("orders").getList(
-                pagination.pageIndex + 1,
-                pagination.pageSize,
-                {
-                    filter: filterString,
-                    sort: "-created",
-                }
-            )
+            const result: OrderListResponse = await pb.collection("orders").getList(1, 100, {
+                filter: filterString,
+                sort: "-created",
+            })
 
             setOrders(result.items)
         } catch (error) {
@@ -412,309 +408,230 @@ const OrderConsolePage = () => {
         }
     }
 
+    const lastParamsRef = useRef<{ status: string; query: string } | null>(null)
     useEffect(() => {
-        const key = `${pagination.pageIndex}-${statusFilter}-${searchQuery}`
-        if (lastQueryKey.current === key) return
-        lastQueryKey.current = key
+        const currentParams = {
+            status: statusFilter,
+            query: searchQuery,
+        }
+        if (
+            lastParamsRef.current &&
+            lastParamsRef.current.status === currentParams.status &&
+            lastParamsRef.current.query === currentParams.query
+        ) {
+            return
+        }
+        lastParamsRef.current = currentParams
         fetchOrders()
-    }, [pagination.pageIndex, statusFilter, searchQuery])
+    }, [statusFilter, searchQuery])
 
-    // Define columns
+    // Handle order deletion
+    const handleDelete = async (orderId: string) => {
+        try {
+            await pb.collection("orders").delete(orderId)
+            toast.success("Order deleted successfully")
+            await fetchOrders()
+        } catch (error) {
+            console.error("Failed to delete order:", error)
+            toast.error("Failed to delete order")
+        }
+    }
+
+    // Handle order duplication
+    const handleDuplicate = async (order: Order) => {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const {id, created, updated, ...orderData} = order
+            const newOrderNumber = `${order.order_number}-COPY`
+
+            await pb.collection("orders").create({
+                ...orderData,
+                order_number: newOrderNumber,
+                status: "pending",
+            })
+
+            toast.success("Order duplicated successfully")
+            fetchOrders()
+        } catch (error) {
+            console.error("Failed to duplicate order:", error)
+            toast.error("Failed to duplicate order")
+        }
+    }
+
+    // Define columns for DataTable
     const columns: ColumnDef<Order>[] = [
-        {
-            id: "select",
-            header: ({table}) => (
-                <div className="flex items-center justify-center">
-                    <Checkbox
-                        checked={
-                            table.getIsAllPageRowsSelected() ||
-                            (table.getIsSomePageRowsSelected() && "indeterminate")
-                        }
-                        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-                        aria-label="Select all"
-                    />
-                </div>
-            ),
-            cell: ({row}) => (
-                <div className="flex items-center justify-center">
-                    <Checkbox
-                        checked={row.getIsSelected()}
-                        onCheckedChange={(value) => row.toggleSelected(!!value)}
-                        aria-label="Select row"
-                    />
-                </div>
-            ),
-            enableSorting: false,
-            enableHiding: false,
-        },
         {
             accessorKey: "order_number",
             header: "Order Number",
             cell: ({row}) => (
-                <div className="font-medium">{row.original.order_number}</div>
+                <Button
+                    variant="link"
+                    className="text-foreground w-fit px-0 text-left　cursor-pointer"
+                    onClick={() => {
+                        setSelectedOrder(row.original)
+                        setDetailDialogOpen(true)
+                    }}
+                >
+                    {row.original.order_number}
+                </Button>
             ),
+            enableSorting: true,
         },
         {
             accessorKey: "items_count",
             header: "Items",
-            cell: ({row}) => <div>{row.original.items_count} items</div>,
+            cell: ({row}) => (
+                <Badge variant="outline" className="text-muted-foreground px-1.5 size-6">
+                    {row.original.items_count}
+                </Badge>
+            ),
+            enableSorting: true,
         },
         {
             accessorKey: "total_amount",
-            header: () => <div className="text-right">Total Amount</div>,
+            header: () => <div className="text-right">Total</div>,
             cell: ({row}) => (
-                <div className="text-right font-semibold">
+                <div className="text-right font-medium">
                     ${row.original.total_amount.toLocaleString()}
                 </div>
             ),
+            enableSorting: true,
         },
         {
             accessorKey: "status",
             header: "Status",
             cell: ({row}) => <OrderStatusBadge status={row.original.status}/>,
+            enableSorting: true,
         },
         {
             accessorKey: "payment_method",
-            header: "Payment Method",
+            header: "Payment",
             cell: ({row}) => (
-                <div className="capitalize">{row.original.payment_method}</div>
+                <Badge variant="outline" className="text-muted-foreground px-1.5 capitalize">
+                    {row.original.payment_method}
+                </Badge>
             ),
+            enableSorting: true,
         },
         {
             accessorKey: "order_date",
-            header: "Order Date",
+            header: "Date",
             cell: ({row}) => (
-                <div>{format(new Date(row.original.order_date), "yyyy-MM-dd HH:mm")}</div>
+                <div className="text-sm">
+                    {format(new Date(row.original.order_date), "yyyy-MM-dd HH:mm")}
+                </div>
             ),
+            enableSorting: true,
         },
         {
             id: "actions",
-            header: () => <div className="text-right">Actions</div>,
+            header: () => null,
             cell: ({row}) => (
-                <div className="flex justify-end gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                            setSelectedOrder(row.original)
-                            setDetailDialogOpen(true)
-                        }}
-                    >
-                        <IconEye size={16} className="mr-1"/>
-                        View
-                    </Button>
-                    <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => {
-                            setSelectedOrder(row.original)
-                            setUpdateDialogOpen(true)
-                        }}
-                    >
-                        <IconEdit size={16} className="mr-1"/>
-                        Update
-                    </Button>
-                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            className="data-[state=open]:bg-muted text-muted-foreground flex size-8 cursor-pointer"
+                            size="icon"
+                        >
+                            <IconDotsVertical/>
+                            <span className="sr-only">Open menu</span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                            onClick={() => {
+                                setSelectedOrder(row.original)
+                                setDetailDialogOpen(true)
+                            }}
+                        >
+                            <IconEye className="mr-2 h-4 w-4"/>
+                            View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => {
+                                setSelectedOrder(row.original)
+                                setUpdateDialogOpen(true)
+                            }}
+                        >
+                            <IconEdit className="mr-2 h-4 w-4"/>
+                            Update Status
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(row.original)}>
+                            <IconCopy className="mr-2 h-4 w-4"/>
+                            Duplicate
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator/>
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => handleDelete(row.original.id)}
+                        >
+                            <IconTrash className="mr-2 h-4 w-4"/>
+                            Delete
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             ),
+            enableSorting: false,
+            enableHiding: false,
         },
     ]
 
-    const table = useReactTable({
-        data: orders,
-        columns,
-        state: {
-            sorting,
-            columnVisibility,
-            rowSelection,
-            columnFilters,
-            pagination,
-        },
-        enableRowSelection: true,
-        onRowSelectionChange: setRowSelection,
-        onSortingChange: setSorting,
-        onColumnFiltersChange: setColumnFilters,
-        onColumnVisibilityChange: setColumnVisibility,
-        onPaginationChange: setPagination,
-        getCoreRowModel: getCoreRowModel(),
-        getFilteredRowModel: getFilteredRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
-        getSortedRowModel: getSortedRowModel(),
-        manualPagination: true,
-        pageCount: Math.ceil(orders.length / pagination.pageSize),
-    })
+    // Toolbar component
+    const toolbar = (
+        <div className="flex gap-4 flex-1">
+            <Select
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(value as OrderStatus | "all")}
+            >
+                <SelectTrigger className="w-50">
+                    <SelectValue placeholder="All Status"/>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="pending">Pending Payment</SelectItem>
+                    <SelectItem value="processing">Processing</SelectItem>
+                    <SelectItem value="shipped">Shipped</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+            </Select>
+
+            <Input
+                placeholder="Search order number or payment ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-sm"
+            />
+        </div>
+    )
 
     return (
         <div className="p-6 space-y-6">
             <Card>
                 <CardContent>
-                    <div className="flex gap-4">
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(value) => {
-                                setStatusFilter(value as OrderStatus | "all")
-                                setPagination({...pagination, pageIndex: 0})
-                            }}
-                        >
-                            <SelectTrigger className="w-50">
-                                <SelectValue placeholder="All Status"/>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="pending">Pending Payment</SelectItem>
-                                <SelectItem value="processing">Processing</SelectItem>
-                                <SelectItem value="shipped">Shipped</SelectItem>
-                                <SelectItem value="delivered">Delivered</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Input
-                            placeholder="Search order number or payment ID..."
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value)
-                                setPagination({...pagination, pageIndex: 0})
-                            }}
-                            className="max-w-sm"
-                        />
-                    </div>
-                </CardContent>
-                <CardContent>
-                    <div className="overflow-hidden rounded-lg border">
-                        <Table>
-                            <TableHeader className="bg-muted sticky top-0 z-10">
-                                {table.getHeaderGroups().map((headerGroup) => (
-                                    <TableRow key={headerGroup.id}>
-                                        {headerGroup.headers.map((header) => (
-                                            <TableHead key={header.id} colSpan={header.colSpan}>
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(
-                                                        header.column.columnDef.header,
-                                                        header.getContext()
-                                                    )}
-                                            </TableHead>
-                                        ))}
-                                    </TableRow>
-                                ))}
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                    Array.from({length: 5}).map((_, index) => (
-                                        <TableRow key={index}>
-                                            <TableCell><Skeleton className="h-4 w-8"/></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-32"/></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-16"/></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-20"/></TableCell>
-                                            <TableCell><Skeleton className="h-6 w-16"/></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-16"/></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-32"/></TableCell>
-                                            <TableCell><Skeleton className="h-8 w-24 ml-auto"/></TableCell>
-                                        </TableRow>
-                                    ))
-                                ) : table.getRowModel().rows?.length ? (
-                                    table.getRowModel().rows.map((row) => (
-                                        <TableRow
-                                            key={row.id}
-                                            data-state={row.getIsSelected() && "selected"}
-                                        >
-                                            {row.getVisibleCells().map((cell) => (
-                                                <TableCell key={cell.id}>
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                </TableCell>
-                                            ))}
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={columns.length} className="text-center py-12">
-                                            <IconPackage className="mx-auto mb-4 text-muted-foreground" size={48}/>
-                                            <p className="text-muted-foreground">No orders found</p>
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                    {/* Data Table with toolbar */}
+                    <DataTableGeneric
+                        data={orders}
+                        columns={columns}
+                        enableRowSelection={true}
+                        enableDragDrop={true}
+                        enableColumnVisibility={true}
+                        enablePagination={true}
+                        enableSorting={true}
+                        loading={loading}
+                        loadingRows={5}
+                        pageSize={10}
+                        emptyMessage="No orders found"
+                        toolbar={toolbar}
+                        onDataChange={(newOrders) => {
+                            setOrders(newOrders)
+                            // 可选：同步到后端
+                            console.log("Orders reordered:", newOrders.map(o => o.order_number))
+                        }}
+                    />
                 </CardContent>
             </Card>
-
-            {/* Pagination */}
-            <div className="flex items-center justify-between px-4">
-                <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-                    {table.getFilteredSelectedRowModel().rows.length} of{" "}
-                    {table.getFilteredRowModel().rows.length} row(s) selected.
-                </div>
-                <div className="flex w-full items-center gap-8 lg:w-fit">
-                    <div className="hidden items-center gap-2 lg:flex">
-                        <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                            Rows per page
-                        </Label>
-                        <Select
-                            value={`${table.getState().pagination.pageSize}`}
-                            onValueChange={(value) => {
-                                table.setPageSize(Number(value))
-                            }}
-                        >
-                            <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                                <SelectValue placeholder={table.getState().pagination.pageSize}/>
-                            </SelectTrigger>
-                            <SelectContent side="top">
-                                {[10, 20, 30, 40, 50].map((pageSize) => (
-                                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                                        {pageSize}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex w-fit items-center justify-center text-sm font-medium">
-                        Page {table.getState().pagination.pageIndex + 1} of{" "}
-                        {table.getPageCount()}
-                    </div>
-                    <div className="ml-auto flex items-center gap-2 lg:ml-0">
-                        <Button
-                            variant="outline"
-                            className="hidden h-8 w-8 p-0 lg:flex"
-                            onClick={() => table.setPageIndex(0)}
-                            disabled={!table.getCanPreviousPage()}
-                        >
-                            <span className="sr-only">Go to first page</span>
-                            <IconChevronsLeft/>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="size-8"
-                            size="icon"
-                            onClick={() => table.previousPage()}
-                            disabled={!table.getCanPreviousPage()}
-                        >
-                            <span className="sr-only">Go to previous page</span>
-                            <IconChevronLeft/>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="size-8"
-                            size="icon"
-                            onClick={() => table.nextPage()}
-                            disabled={!table.getCanNextPage()}
-                        >
-                            <span className="sr-only">Go to next page</span>
-                            <IconChevronRight/>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="hidden size-8 lg:flex"
-                            size="icon"
-                            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                            disabled={!table.getCanNextPage()}
-                        >
-                            <span className="sr-only">Go to last page</span>
-                            <IconChevronsRight/>
-                        </Button>
-                    </div>
-                </div>
-            </div>
 
             {/* Dialogs */}
             {selectedOrder && (
@@ -736,4 +653,4 @@ const OrderConsolePage = () => {
     )
 }
 
-export default OrderConsolePage
+export default OrderManagementPage
