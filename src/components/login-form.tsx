@@ -9,10 +9,17 @@ import {toast} from "sonner"
 import {Spinner} from "@/components/ui/spinner.tsx";
 import {ClientResponseError} from "pocketbase";
 
+interface LoginFormProps extends React.ComponentProps<"form"> {
+    onPasswordFocus?: () => void
+    onPasswordBlur?: () => void
+}
+
 export function LoginForm({
                               className,
+                              onPasswordFocus,
+                              onPasswordBlur,
                               ...props
-                          }: React.ComponentProps<"form">) {
+                          }: LoginFormProps) {
     const Navigate = useNavigate()
 
     const [email, setEmail] = useState<string>('')
@@ -67,7 +74,7 @@ export function LoginForm({
                     <div className="flex items-center">
                         <FieldLabel htmlFor="password">Password</FieldLabel>
                         <a
-                            href="script:void(0)"
+                            href="javascript:void(0)"
                             className="ml-auto text-sm underline-offset-4 hover:underline"
                             onClick={() =>
                                 toast.info("Please contact the supervisor！")
@@ -77,8 +84,15 @@ export function LoginForm({
                         </a>
 
                     </div>
-                    <Input id="password" type="password" required value={password}
-                           onChange={(e) => setPassword(e.target.value)}/>
+                    <Input
+                        id="password"
+                        type="password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onFocus={onPasswordFocus}
+                        onBlur={onPasswordBlur}
+                    />
                 </Field>
                 <Field>
                     <Button type="submit" className="cursor-pointer">{loading && <Spinner/>}Login</Button>
