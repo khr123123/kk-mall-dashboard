@@ -36,22 +36,14 @@ export default function LoginPage() {
                     </div>
                 </div>
             </div>
-            <div className="bg-muted relative hidden lg:block overflow-hidden">
-                <img
-                    src={catImg}
-                    alt="Image"
-                    className={`absolute inset-0 h-full w-full object-cover object-right dark:brightness-[0.2] dark:grayscale   ${
-                        backgroundImg === catImg ? 'opacity-100' : 'opacity-0'
-                    }`}
-                />
-                <img
-                    src={catImg3}
-                    alt="Image"
-                    className={`absolute inset-0 h-full w-full object-cover object-right dark:brightness-[0.2] dark:grayscale  ${
-                        backgroundImg === catImg3 ? 'opacity-100' : 'opacity-0'
-                    }`}
-                />
-            </div>
+            <div
+                className="bg-muted relative hidden lg:block overflow-hidden transition-all duration-500 ease-in-out dark:brightness-[0.2] dark:grayscale"
+                style={{
+                    backgroundImage: `url(${backgroundImg})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'right'
+                }}
+            />
         </div>
     )
 }
