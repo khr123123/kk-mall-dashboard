@@ -8,7 +8,7 @@ import {ToggleGroup, ToggleGroupItem} from "@/components/ui/toggle-group"
 import {Skeleton} from "@/components/ui/skeleton"
 import pb from "@/lib/pocketbase.ts"
 import type {RecordModel} from "pocketbase"
-import type {Order} from "@/pages/OrderConsolePage.tsx"
+import type {Order} from "@/types"
 import {DollarSign, ShoppingBag, TrendingDown, TrendingUp} from "lucide-react"
 
 interface ChartData {
