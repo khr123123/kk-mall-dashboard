@@ -87,7 +87,7 @@ export default function UsersPage() {
     try {
       await updateUser(selectedUser.id, {
         name: editForm.name,
-        role: editForm.role,
+        role: editForm.role as "admin" | "user" | "staff",
       })
       toast.success("User updated")
       setEditOpen(false)
