@@ -34,7 +34,7 @@ export function SectionCards() {
   }
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount)
+    new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY" }).format(amount)
 
   if (isLoading || !stats) {
     return (
@@ -56,40 +56,40 @@ export function SectionCards() {
 
   const cards = [
     {
-      title: "Total Revenue",
-      value: formatCurrency(stats.totalRevenue),
-      change: stats.totalRevenueChange,
+      title: "今日营收",
+      value: formatCurrency(stats.todayRevenue),
+      change: stats.todayRevenueChange,
       gradient: "from-blue-50 to-white dark:from-blue-950/20 dark:to-card border-blue-100 dark:border-blue-900",
       textColor: "text-blue-700 dark:text-blue-300",
       descColor: "text-blue-600 dark:text-blue-400",
-      footer: "Compared to yesterday",
+      footer: "与昨日对比",
     },
     {
-      title: "New Customers",
-      value: stats.newCustomers.toLocaleString(),
-      change: stats.newCustomersChange,
+      title: "新增用户",
+      value: stats.newUsersToday.toLocaleString(),
+      change: stats.newUsersTodayChange,
       gradient: "from-green-50 to-white dark:from-green-950/20 dark:to-card border-green-100 dark:border-green-900",
       textColor: "text-green-700 dark:text-green-300",
       descColor: "text-green-600 dark:text-green-400",
-      footer: stats.newCustomersChange >= 0 ? "Healthy growth" : "Needs attention",
+      footer: stats.newUsersTodayChange >= 0 ? "用户增长良好" : "获客需关注",
     },
     {
-      title: "Active Accounts",
+      title: "活跃用户",
       value: stats.activeAccounts.toLocaleString(),
       change: stats.activeAccountsChange,
       gradient: "from-purple-50 to-white dark:from-purple-950/20 dark:to-card border-purple-100 dark:border-purple-900",
       textColor: "text-purple-700 dark:text-purple-300",
       descColor: "text-purple-600 dark:text-purple-400",
-      footer: "Last 7 days activity",
+      footer: "近 7 天活跃",
     },
     {
-      title: "Today's Orders",
-      value: stats.totalOrders.toLocaleString(),
-      change: stats.totalOrdersChange,
+      title: "今日订单",
+      value: stats.todayOrders.toLocaleString(),
+      change: stats.todayOrdersChange,
       gradient: "from-orange-50 to-white dark:from-orange-950/20 dark:to-card border-orange-100 dark:border-orange-900",
       textColor: "text-orange-700 dark:text-orange-300",
       descColor: "text-orange-600 dark:text-orange-400",
-      footer: "Orders today",
+      footer: "今日已处理订单",
     },
   ]
 
@@ -129,7 +129,7 @@ export function SectionCards() {
           </CardHeader>
           <CardFooter className="flex-col items-start gap-1.5 text-sm">
             <div className={`flex gap-2 font-medium ${card.textColor}`}>
-              {card.change >= 0 ? "Trending up" : "Trending down"}
+              {card.change >= 0 ? "趋势上升" : "趋势下降"}
               {card.change >= 0 ? (
                 <IconTrendingUp className="size-4" />
               ) : (
