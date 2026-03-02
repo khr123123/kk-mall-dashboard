@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router"
 import { toast } from "sonner"
 import {
-  IconPlus,
   IconTrash,
   IconUpload,
   IconX,
@@ -249,190 +248,331 @@ interface SkuEditorProps {
   skus: SkuForm[]
   onChange: (skus: SkuForm[]) => void
   defaultPrice?: number
+  productName?: string
 }
 
-function SkuEditor({ skus, onChange, defaultPrice = 0 }: SkuEditorProps) {
-  const [newSpecKeys, setNewSpecKeys] = useState<Record<number, string>>({})
-
-  const addSku = () => {
-    onChange([
-      ...skus,
-      {
-        specs: {},
-        price: defaultPrice,
-        stock: 0,
-        status: true,
-        sku_code: "",
-        _isNew: true,
-      },
-    ])
-  }
-
-  const removeSku = (index: number) => {
-    onChange(skus.filter((_, i) => i !== index))
-  }
-
-  const updateSku = (index: number, field: keyof SkuForm, value: any) => {
-    const next = [...skus]
-    ;(next[index] as any)[field] = value
-    onChange(next)
-  }
-
-  const addSpecKey = (skuIndex: number, key: string) => {
-    if (!key.trim()) return
-    const next = [...skus]
-    next[skuIndex].specs = { ...next[skuIndex].specs, [key.trim()]: "" }
-    onChange(next)
-    setNewSpecKeys((prev) => ({ ...prev, [skuIndex]: "" }))
-  }
-
-  const updateSpecValue = (skuIndex: number, key: string, value: string) => {
-    const next = [...skus]
-    next[skuIndex].specs = { ...next[skuIndex].specs, [key]: value }
-    onChange(next)
-  }
-
-  const removeSpec = (skuIndex: number, key: string) => {
-    const next = [...skus]
-    const { [key]: _, ...rest } = next[skuIndex].specs
-    next[skuIndex].specs = rest
-    onChange(next)
-  }
-
+function SkuEditor({ skus, onChange, defaultPrice = 0, productName = "" }: SkuEditorProps) {
   return (
     <div className="space-y-3">
-      {skus.map((sku, index) => (
-        <div
-          key={index}
-          className="border rounded-lg p-4 space-y-3 bg-muted/20 relative"
-        >
-          <div className="flex items-center justify-between">
-            <span className="font-medium text-sm">
-              SKU #{index + 1}
-              {sku._isNew && (
-                <Badge className="ml-2 text-xs bg-blue-500 text-white">新增</Badge>
-              )}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive"
-              onClick={() => removeSku(index)}
-            >
-              <IconTrash className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* 规格属性 */}
-          <div className="space-y-2">
-            <Label className="text-xs">规格属性</Label>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(sku.specs).map(([key, val]) => (
-                <div
-                  key={key}
-                  className="flex items-center gap-1 border rounded px-2 py-1 bg-background"
-                >
-                  <span className="text-xs text-muted-foreground">{key}:</span>
-                  <Input
-                    value={val}
-                    onChange={(e) => updateSpecValue(index, key, e.target.value)}
-                    className="h-5 text-xs w-20 border-none p-0 focus-visible:ring-0"
-                    placeholder="值"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSpec(index, key)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <IconX className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-              {/* 添加规格 key */}
-              <div className="flex items-center gap-1">
-                <Input
-                  value={newSpecKeys[index] ?? ""}
-                  onChange={(e) =>
-                    setNewSpecKeys((prev) => ({ ...prev, [index]: e.target.value }))
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      addSpecKey(index, newSpecKeys[index] ?? "")
-                    }
-                  }}
-                  className="h-7 text-xs w-24"
-                  placeholder="属性名"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => addSpecKey(index, newSpecKeys[index] ?? "")}
-                >
-                  <IconPlus className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* SKU 基本信息 */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">SKU 价格</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={sku.price}
-                onChange={(e) => updateSku(index, "price", parseFloat(e.target.value) || 0)}
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">库存数量</Label>
-              <Input
-                type="number"
-                min="0"
-                value={sku.stock}
-                onChange={(e) => updateSku(index, "stock", parseInt(e.target.value) || 0)}
-                className="h-8 text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">SKU 编码</Label>
-              <Input
-                value={sku.sku_code}
-                onChange={(e) => updateSku(index, "sku_code", e.target.value)}
-                className="h-8 text-sm"
-                placeholder="选填"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id={`sku-status-${index}`}
-              checked={sku.status}
-              onCheckedChange={(c) => updateSku(index, "status", !!c)}
-            />
-            <Label htmlFor={`sku-status-${index}`} className="text-sm">
-              SKU 上架
-            </Label>
-          </div>
-        </div>
-      ))}
-
-      <Button type="button" variant="outline" onClick={addSku} className="w-full gap-2">
-        <IconPlus className="h-4 w-4" />
-        添加 SKU 规格
-      </Button>
+      <SkuGeneratorEditor
+        skus={skus}
+        onChange={onChange}
+        defaultPrice={defaultPrice}
+        productName={productName}
+      />
     </div>
   )
 }
 
+// ==================== SKU 组合生成器 ====================
+interface SkuGeneratorProps {
+  skus: SkuForm[]
+  onChange: (skus: SkuForm[]) => void
+  defaultPrice?: number
+  productName: string
+}
+
+function normalizeSpecKey(key: string): string {
+  const lower = key.toLowerCase()
+  if (lower.includes("色") || lower.includes("颜色") || lower === "color") return "color"
+  if (lower.includes("尺码") || lower.includes("尺寸") || lower === "size") return "size"
+  return key
+}
+
+function cartesianProduct(options: Record<string, string[]>): Array<Record<string, string>> {
+  const entries = Object.entries(options).filter(([, vals]) => vals.length > 0)
+  if (entries.length === 0) return []
+  let combos: Array<Record<string, string>> = [{}]
+  for (const [key, values] of entries) {
+    const next: Array<Record<string, string>> = []
+    for (const combo of combos) {
+      for (const v of values) {
+        next.push({ ...combo, [key]: v })
+      }
+    }
+    combos = next
+  }
+  return combos
+}
+
+function SkuGeneratorEditor({ skus, onChange, defaultPrice = 0, productName }: SkuGeneratorProps) {
+  const [attrName, setAttrName] = useState("")
+  const [attrValuesInput, setAttrValuesInput] = useState("")
+  const [specOptions, setSpecOptions] = useState<Record<string, string[]>>({})
+  const [valueInputs, setValueInputs] = useState<Record<string, string>>({})
+ 
+  const importFromSkus = () => {
+    const derived: Record<string, string[]> = {}
+    for (const s of skus) {
+      for (const [k, v] of Object.entries(s.specs)) {
+        if (!derived[k]) derived[k] = []
+        if (!derived[k].includes(v)) derived[k].push(v)
+      }
+    }
+    setSpecOptions(derived)
+    toast.success("已从现有 SKU 导入属性取值")
+  }
+
+  const addAttribute = () => {
+    const name = attrName.trim()
+    if (!name) return
+    const values = attrValuesInput
+      .split(/[,\s]/)
+      .map((v) => v.trim())
+      .filter(Boolean)
+    const key = name
+    setSpecOptions((prev) => ({
+      ...prev,
+      [key]: Array.from(new Set([...(prev[key] ?? []), ...values])),
+    }))
+    setAttrName("")
+    setAttrValuesInput("")
+  }
+
+  const removeAttribute = (key: string) => {
+    const rest = { ...specOptions }
+    delete rest[key]
+    setSpecOptions(rest)
+  }
+
+  const addAttributeValue = (key: string, value: string) => {
+    const v = value.trim()
+    if (!v) return
+    setSpecOptions((prev) => ({
+      ...prev,
+      [key]: prev[key]?.includes(v) ? prev[key]! : [...(prev[key] ?? []), v],
+    }))
+    setValueInputs((pi) => ({ ...pi, [key]: "" }))
+  }
+
+  const removeAttributeValue = (key: string, val: string) => {
+    const vals = specOptions[key] ?? []
+    setSpecOptions((prev) => ({ ...prev, [key]: vals.filter((v) => v !== val) }))
+  }
+
+  const generateSkus = () => {
+    const combos = cartesianProduct(specOptions)
+    const next: SkuForm[] = combos.map((combo) => ({
+      specs: combo,
+      price: defaultPrice,
+      stock: 0,
+      status: true,
+      sku_code: "",
+      _isNew: true,
+    }))
+    onChange(next)
+    if (next.length === 0) {
+      toast.info("未生成任何 SKU，请先添加属性及取值")
+    }
+  }
+
+  const exportJson = () => {
+    const arr = skus.map((s, idx) => {
+      const normalizedSpecs: Record<string, string> = {}
+      for (const [k, v] of Object.entries(s.specs)) {
+        const nk = normalizeSpecKey(k)
+        normalizedSpecs[nk] = v
+      }
+      return {
+        id: `auto_${Math.random().toString(36).slice(2, 10)}_${idx + 1}`,
+        product_id: productName,
+        specs: normalizedSpecs,
+        price: s.price,
+        stock: s.stock,
+        status: "active",
+      }
+    })
+    const text = JSON.stringify(arr, null, 2)
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success("SKU JSON 已复制到剪贴板"),
+      () => toast.error("复制失败，请手动选择导出文本")
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>属性定义（按规格生成组合）</Label>
+        <div className="flex gap-2">
+          <Input
+            value={attrName}
+            onChange={(e) => setAttrName(e.target.value)}
+            placeholder="属性名，例如：色 / 尺码"
+            className="max-w-[200px]"
+          />
+          <Input
+            value={attrValuesInput}
+            onChange={(e) => setAttrValuesInput(e.target.value)}
+            placeholder="属性取值，使用逗号或空格分隔"
+          />
+          <Button type="button" variant="outline" onClick={addAttribute}>
+            添加属性
+          </Button>
+          <Button type="button" variant="secondary" onClick={importFromSkus}>
+            从已有 SKU 导入属性
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(specOptions).map(([key, vals]) => (
+            <div key={key} className="border rounded px-2 py-1">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{key}</Badge>
+                <div className="flex flex-wrap gap-1">
+                  {vals.map((val) => (
+                    <Badge key={`${key}-${val}`} variant="outline" className="gap-1 pl-2 pr-1 py-0.5 text-xs">
+                      {val}
+                      <button
+                        type="button"
+                        onClick={() => removeAttributeValue(key, val)}
+                        className="hover:text-destructive"
+                        aria-label="移除取值"
+                      >
+                        <IconX className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  value={valueInputs[key] ?? ""}
+                  onChange={(e) => setValueInputs((pi) => ({ ...pi, [key]: e.target.value }))}
+                  placeholder="添加取值..."
+                  className="h-7 w-32 text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => addAttributeValue(key, valueInputs[key] ?? "")}
+                  disabled={!((valueInputs[key] ?? "").trim())}
+                >
+                  添加
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => removeAttribute(key)}
+                >
+                  <IconTrash className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button type="button" onClick={generateSkus}>
+            根据属性生成 SKU 组合
+          </Button>
+          <Button type="button" variant="outline" onClick={exportJson}>
+            导出 SKU JSON
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        {skus.length === 0 ? (
+          <p className="text-sm text-muted-foreground">尚未生成 SKU 组合</p>
+        ) : (
+          skus.map((sku, index) => (
+            <div
+              key={index}
+              className="border rounded-lg p-4 space-y-3 bg-muted/20"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-sm">
+                  SKU #{index + 1}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`sku-status-${index}`}
+                    checked={sku.status}
+                    onCheckedChange={(c) =>
+                      onChange(
+                        skus.map((s, i) =>
+                          i === index ? { ...s, status: !!c } : s
+                        )
+                      )
+                    }
+                  />
+                  <Label htmlFor={`sku-status-${index}`} className="text-sm">
+                    上架
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(sku.specs).map(([k, v]) => (
+                  <Badge key={k} variant="outline" className="text-xs">
+                    {k}: {v}
+                  </Badge>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">价格</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={sku.price}
+                    onChange={(e) =>
+                      onChange(
+                        skus.map((s, i) =>
+                          i === index
+                            ? { ...s, price: parseFloat(e.target.value) || 0 }
+                            : s
+                        )
+                      )
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">库存</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={sku.stock}
+                    onChange={(e) =>
+                      onChange(
+                        skus.map((s, i) =>
+                          i === index
+                            ? { ...s, stock: parseInt(e.target.value) || 0 }
+                            : s
+                        )
+                      )
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">SKU 编码</Label>
+                  <Input
+                    value={sku.sku_code}
+                    onChange={(e) =>
+                      onChange(
+                        skus.map((s, i) =>
+                          i === index ? { ...s, sku_code: e.target.value } : s
+                        )
+                      )
+                    }
+                    className="h-8 text-sm"
+                    placeholder="选填"
+                  />
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
 // ==================== 标签编辑器 ====================
 interface TagEditorProps {
   value: string
@@ -682,9 +822,10 @@ export default function ProductFormPage() {
       if (newSkus.length > 0) await batchCreateSkus(newSkus)
 
       navigate("/products")
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to save product:", err)
-      toast.error(err?.message || "保存失败，请重试")
+      const message = err instanceof Error ? err.message : "保存失败，请重试"
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -882,11 +1023,12 @@ export default function ProductFormPage() {
               <CardTitle>SKU 规格变体</CardTitle>
             </CardHeader>
             <CardContent>
-              <SkuEditor
-                skus={skus}
-                onChange={setSkus}
-                defaultPrice={form.price}
-              />
+            <SkuEditor
+              skus={skus}
+              onChange={setSkus}
+              defaultPrice={form.price}
+              productName={form.name}
+            />
             </CardContent>
           </Card>
         </div>
