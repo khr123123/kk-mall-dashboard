@@ -252,7 +252,7 @@ interface SkuEditorProps {
 }
 
 function SkuEditor({ skus, onChange, defaultPrice = 0 }: SkuEditorProps) {
-  const [newSpecKey, setNewSpecKey] = useState("")
+  const [newSpecKeys, setNewSpecKeys] = useState<Record<number, string>>({})
 
   const addSku = () => {
     onChange([
@@ -283,7 +283,7 @@ function SkuEditor({ skus, onChange, defaultPrice = 0 }: SkuEditorProps) {
     const next = [...skus]
     next[skuIndex].specs = { ...next[skuIndex].specs, [key.trim()]: "" }
     onChange(next)
-    setNewSpecKey("")
+    setNewSpecKeys((prev) => ({ ...prev, [skuIndex]: "" }))
   }
 
   const updateSpecValue = (skuIndex: number, key: string, value: string) => {
@@ -352,12 +352,14 @@ function SkuEditor({ skus, onChange, defaultPrice = 0 }: SkuEditorProps) {
               {/* 添加规格 key */}
               <div className="flex items-center gap-1">
                 <Input
-                  value={newSpecKey}
-                  onChange={(e) => setNewSpecKey(e.target.value)}
+                  value={newSpecKeys[index] ?? ""}
+                  onChange={(e) =>
+                    setNewSpecKeys((prev) => ({ ...prev, [index]: e.target.value }))
+                  }
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
-                      addSpecKey(index, newSpecKey)
+                      addSpecKey(index, newSpecKeys[index] ?? "")
                     }
                   }}
                   className="h-7 text-xs w-24"
@@ -368,7 +370,7 @@ function SkuEditor({ skus, onChange, defaultPrice = 0 }: SkuEditorProps) {
                   variant="outline"
                   size="icon"
                   className="h-7 w-7"
-                  onClick={() => addSpecKey(index, newSpecKey)}
+                  onClick={() => addSpecKey(index, newSpecKeys[index] ?? "")}
                 >
                   <IconPlus className="h-3 w-3" />
                 </Button>
