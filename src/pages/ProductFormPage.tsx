@@ -102,8 +102,8 @@ function flattenCategoryTree(
       id: node.id,
       label: `${pad}${prefix}${node.icon ? node.icon + " " : ""}${node.name}`,
     })
-    if (node.children.length > 0) {
-      result.push(...flattenCategoryTree(node.children, depth + 1))
+    if (node.childNodes && node.childNodes.length > 0) {
+      result.push(...flattenCategoryTree(node.childNodes, depth + 1))
     }
   }
   return result

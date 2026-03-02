@@ -20,22 +20,24 @@ export interface User extends BaseRecord {
 }
 
 // ---- Category ----
-// ⚠️ 重要：children 字段不存在于数据库！
-// category 表有 parent 字段（relation, self-reference）
-// children 树结构在前端通过 buildCategoryTree() 构建
+// category 表通过 children 字段（relation 数组，自引用）实现树结构
+// children 为空数组 → 叶子节点（子分类）
+// children 非空 → 父分类，children 包含子分类 ID 列表
 export interface Category extends BaseRecord {
   name: string
   icon?: string
-  parent?: string          // relation → category.id（自引用）
-  sort_order?: number
+  children: string[]       // relation[] → category.id（子分类 ID 列表）
+  collectionId?: string
+  collectionName?: string
   expand?: {
-    parent?: Category      // PocketBase expand 自动填充
+    children?: Category[]  // PocketBase expand 自动填充
   }
 }
 
-// 前端树结构（不存库）
-export interface CategoryNode extends Category {
-  children: CategoryNode[] // 前端构建，非数据库字段
+// 前端树结构（展示用）
+export interface CategoryNode extends Omit<Category, 'children'> {
+  children: string[]       // 原始 children ID 数组
+  childNodes: CategoryNode[] // 前端构建的子节点列表
 }
 
 // ---- Brands ----

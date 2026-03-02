@@ -237,14 +237,23 @@ export default function ChartPage() {
       }));
   };
 
-  /** 分类分布（取顶层分类） */
+  /** 分类分布（取顶层分类：children 非空的是父分类） */
   const calculateCategoryDistribution = async (
     categories: Category[],
     products: Product[]
   ): Promise<CategoryDistributionItem[]> => {
-    const topCategories = categories.filter(
-      (cat) => !cat.parent || (Array.isArray(cat.parent) ? cat.parent.length === 0 : String(cat.parent).length === 0)
-    );
+    // 收集所有被引用为子分类的 ID
+    const childIdSet = new Set<string>();
+    for (const cat of categories) {
+      const children = (cat as any).children;
+      if (Array.isArray(children)) {
+        for (const childId of children) {
+          childIdSet.add(childId);
+        }
+      }
+    }
+    // 顶级分类 = 不在任何 children 数组中的分类（即没有被其他分类引用的）
+    const topCategories = categories.filter((cat) => !childIdSet.has(cat.id));
 
     return topCategories
       .map((category) => {

@@ -6,8 +6,9 @@ import {
   IconTrash,
   IconChevronDown,
   IconChevronRight,
+  IconRefresh,
 } from "@tabler/icons-react"
-import { FolderOpen, FolderClosed, FolderTree, Tag } from "lucide-react"
+import { FolderOpen, FolderClosed, FolderTree, Tag, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -55,8 +56,9 @@ import type { Category, CategoryNode, Brand } from "@/types"
 interface CategoryTreeNodeProps {
   node: CategoryNode
   allCategories: Category[]
-  onEdit: (cat: Category) => void
+  onEdit: (cat: CategoryNode) => void
   onDelete: (id: string) => void
+  onAddChild: (parentId: string) => void
   depth?: number
 }
 
@@ -65,23 +67,24 @@ function CategoryTreeNode({
   allCategories,
   onEdit,
   onDelete,
+  onAddChild,
   depth = 0,
 }: CategoryTreeNodeProps) {
   const [expanded, setExpanded] = useState(depth === 0)
-  const hasChildren = node.children && node.children.length > 0
+  const hasChildren = node.childNodes && node.childNodes.length > 0
 
   return (
     <div>
       <div
-        className={`flex items-center justify-between p-3 rounded-lg border mb-1.5 hover:bg-accent/40 transition-colors ${
-          depth > 0 ? "ml-6 bg-muted/30" : "bg-card"
+        className={`group flex items-center justify-between p-3 rounded-lg border mb-1.5 hover:bg-accent/40 transition-all ${
+          depth > 0 ? "ml-6 bg-muted/20 border-dashed" : "bg-card shadow-sm"
         }`}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {/* 展开/折叠按钮 */}
           <button
             onClick={() => setExpanded(!expanded)}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
             disabled={!hasChildren}
           >
             {hasChildren ? (
@@ -98,33 +101,40 @@ function CategoryTreeNode({
           {/* 文件夹图标 */}
           {hasChildren ? (
             expanded ? (
-              <FolderOpen className="h-4 w-4 text-primary shrink-0" />
+              <FolderOpen className="h-4.5 w-4.5 text-primary shrink-0" />
             ) : (
-              <FolderClosed className="h-4 w-4 text-primary shrink-0" />
+              <FolderClosed className="h-4.5 w-4.5 text-primary shrink-0" />
             )
           ) : (
             <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
 
           {/* 分类名 + icon */}
-          <div className="min-w-0">
+          <div className="min-w-0 flex items-center gap-2">
             <span className="font-medium text-sm">{node.name}</span>
             {node.icon && (
-              <span className="ml-2 text-muted-foreground text-xs">{node.icon}</span>
+              <span className="text-muted-foreground text-xs truncate max-w-[150px]">{node.icon}</span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
           {hasChildren && (
-            <Badge variant="outline" className="text-xs">
-              {node.children.length} 子类
+            <Badge variant="secondary" className="text-xs font-normal">
+              {node.childNodes.length} 子分类
             </Badge>
           )}
-          {node.sort_order !== undefined && node.sort_order > 0 && (
-            <Badge variant="outline" className="text-xs text-muted-foreground">
-              排序 {node.sort_order}
-            </Badge>
+          {/* 只有父分类可添加子分类 */}
+          {depth === 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-primary hover:text-primary"
+              onClick={() => onAddChild(node.id)}
+              title="添加子分类"
+            >
+              <IconPlus className="h-3.5 w-3.5" />
+            </Button>
           )}
           <Button
             variant="ghost"
@@ -147,14 +157,15 @@ function CategoryTreeNode({
 
       {/* 子节点递归渲染 */}
       {hasChildren && expanded && (
-        <div>
-          {node.children.map((child) => (
+        <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200">
+          {node.childNodes.map((child) => (
             <CategoryTreeNode
               key={child.id}
               node={child}
               allCategories={allCategories}
               onEdit={onEdit}
               onDelete={onDelete}
+              onAddChild={onAddChild}
               depth={depth + 1}
             />
           ))}
@@ -170,10 +181,11 @@ function CategoriesTab() {
   const [tree, setTree] = useState<CategoryNode[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editItem, setEditItem] = useState<Category | null>(null)
-  const [form, setForm] = useState({ name: "", icon: "", parent: "", sort_order: "0" })
+  const [editItem, setEditItem] = useState<CategoryNode | null>(null)
+  const [form, setForm] = useState({ name: "", icon: "", parentId: "" })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     load()
@@ -192,20 +204,19 @@ function CategoriesTab() {
     }
   }
 
-  const openCreate = () => {
+  const openCreate = (parentId = "") => {
     setEditItem(null)
-    setForm({ name: "", icon: "", parent: "", sort_order: "0" })
+    setForm({ name: "", icon: "", parentId })
     setErrors({})
     setDialogOpen(true)
   }
 
-  const openEdit = (cat: Category) => {
+  const openEdit = (cat: CategoryNode) => {
     setEditItem(cat)
     setForm({
       name: cat.name,
       icon: cat.icon || "",
-      parent: cat.parent || "",
-      sort_order: String(cat.sort_order ?? 0),
+      parentId: "", // editing doesn't change parent relationship
     })
     setErrors({})
     setDialogOpen(true)
@@ -214,8 +225,6 @@ function CategoriesTab() {
   const validate = () => {
     const errs: Record<string, string> = {}
     if (!form.name.trim()) errs.name = "分类名称不能为空"
-    // 防止把自身设为父级
-    if (editItem && form.parent === editItem.id) errs.parent = "不能将自身设为父级"
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -224,18 +233,18 @@ function CategoriesTab() {
     if (!validate()) return
     setSaving(true)
     try {
-      const data: Partial<Category> = {
-        name: form.name.trim(),
-        icon: form.icon.trim(),
-        sort_order: parseInt(form.sort_order) || 0,
-        parent: form.parent || undefined,
-      }
-
       if (editItem) {
-        await updateCategory(editItem.id, data)
+        await updateCategory(editItem.id, {
+          name: form.name.trim(),
+          icon: form.icon.trim(),
+        })
         toast.success("分类已更新")
       } else {
-        await createCategory(data)
+        await createCategory({
+          name: form.name.trim(),
+          icon: form.icon.trim(),
+          parentId: form.parentId || undefined,
+        })
         toast.success("分类已创建")
       }
       setDialogOpen(false)
@@ -250,14 +259,14 @@ function CategoriesTab() {
 
   const handleDelete = async (id: string) => {
     // 检查是否有子分类
-    const hasChildren = categories.some((c) => c.parent === id)
-    if (hasChildren) {
+    const cat = categories.find((c) => c.id === id)
+    if (cat && cat.children && cat.children.length > 0) {
       toast.error("该分类下有子分类，请先删除子分类")
       return
     }
     if (!confirm("确定删除此分类？此操作不可撤销")) return
     try {
-      await deleteCategory(id)
+      await deleteCategory(id, categories)
       toast.success("分类已删除")
       load()
     } catch {
@@ -265,15 +274,39 @@ function CategoriesTab() {
     }
   }
 
-  // 顶级分类（用于父级下拉框）
-  const topLevelCategories = categories.filter(
-    (c) => !c.parent || c.parent === ""
+  // 过滤分类树
+  const filteredTree = searchQuery.trim()
+    ? tree
+        .map((node) => {
+          const q = searchQuery.toLowerCase()
+          const matchedChildren = node.childNodes.filter((c) =>
+            c.name.toLowerCase().includes(q)
+          )
+          const parentMatch = node.name.toLowerCase().includes(q)
+          if (parentMatch || matchedChildren.length > 0) {
+            return {
+              ...node,
+              childNodes: parentMatch ? node.childNodes : matchedChildren,
+            }
+          }
+          return null
+        })
+        .filter(Boolean) as CategoryNode[]
+    : tree
+
+  // 父分类列表（用于下拉框）
+  const parentCategories = categories.filter(
+    (c) => c.children && c.children.length > 0
   )
+
+  // 统计
+  const parentCount = parentCategories.length
+  const childCount = categories.length - parentCount
 
   if (loading) {
     return (
       <div className="space-y-3">
-        {[...Array(4)].map((_, i) => (
+        {[...Array(5)].map((_, i) => (
           <Skeleton key={i} className="h-14 w-full rounded-lg" />
         ))}
       </div>
@@ -282,33 +315,64 @@ function CategoriesTab() {
 
   return (
     <div className="space-y-4">
+      {/* 统计信息 */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20">
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{categories.length}</p>
+          <p className="text-xs text-muted-foreground">总分类数</p>
+        </div>
+        <div className="p-3 rounded-lg border bg-purple-50/50 dark:bg-purple-950/20">
+          <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{parentCount}</p>
+          <p className="text-xs text-muted-foreground">父分类</p>
+        </div>
+        <div className="p-3 rounded-lg border bg-green-50/50 dark:bg-green-950/20">
+          <p className="text-2xl font-bold text-green-700 dark:text-green-300">{childCount}</p>
+          <p className="text-xs text-muted-foreground">子分类</p>
+        </div>
+      </div>
+
       {/* 操作栏 */}
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-sm">
-          共 {categories.length} 个分类，{topLevelCategories.length} 个顶级分类
-        </p>
-        <Button onClick={openCreate} className="gap-2">
-          <IconPlus className="h-4 w-4" />
-          新建分类
-        </Button>
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索分类..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
+            <IconRefresh className="h-4 w-4" />
+            刷新
+          </Button>
+          <Button onClick={() => openCreate()} className="gap-1.5">
+            <IconPlus className="h-4 w-4" />
+            新建分类
+          </Button>
+        </div>
       </div>
 
       {/* 树状分类列表 */}
-      {tree.length === 0 ? (
+      {filteredTree.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-muted-foreground">
           <FolderTree className="h-12 w-12 mb-3 opacity-40" />
-          <p>暂无分类数据</p>
-          <p className="text-sm mt-1">点击「新建分类」创建第一个分类</p>
+          <p>{searchQuery ? "没有匹配的分类" : "暂无分类数据"}</p>
+          <p className="text-sm mt-1">
+            {searchQuery ? "尝试更换关键词" : "点击「新建分类」创建第一个分类"}
+          </p>
         </div>
       ) : (
         <div>
-          {tree.map((node) => (
+          {filteredTree.map((node) => (
             <CategoryTreeNode
               key={node.id}
               node={node}
               allCategories={categories}
               onEdit={openEdit}
               onDelete={handleDelete}
+              onAddChild={(parentId) => openCreate(parentId)}
               depth={0}
             />
           ))}
@@ -325,7 +389,9 @@ function CategoriesTab() {
             <DialogDescription>
               {editItem
                 ? "修改分类信息后点击保存"
-                : "填写分类信息，parent 字段自引用实现树状结构"}
+                : form.parentId
+                ? `为父分类添加子分类`
+                : "创建新的分类，可选择归属于某个父分类"}
             </DialogDescription>
           </DialogHeader>
 
@@ -348,57 +414,42 @@ function CategoriesTab() {
 
             {/* 图标 */}
             <div className="space-y-1.5">
-              <Label>图标（emoji 或文本标识）</Label>
+              <Label>图标路径</Label>
               <Input
                 value={form.icon}
                 onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                placeholder="例：📱  或  phone"
+                placeholder="例：/categorys/手机数码.svg"
               />
             </div>
 
-            {/* 父级分类（自引用 parent 字段）*/}
-            <div className="space-y-1.5">
-              <Label>父级分类</Label>
-              <p className="text-xs text-muted-foreground">
-                ✅ parent 字段为 Category 表的自引用 relation，留空表示顶级分类
-              </p>
-              <Select
-                value={form.parent || ""}
-                onValueChange={(v) => setForm({ ...form, parent: v === "__none__" ? "" : v })}
-              >
-                <SelectTrigger
-                  className={errors.parent ? "border-destructive" : ""}
+            {/* 父级分类（仅新建时显示）*/}
+            {!editItem && (
+              <div className="space-y-1.5">
+                <Label>父级分类</Label>
+                <p className="text-xs text-muted-foreground">
+                  选择父分类后，新分类将作为其子分类。留空则创建为顶级分类。
+                </p>
+                <Select
+                  value={form.parentId || "__none__"}
+                  onValueChange={(v) =>
+                    setForm({ ...form, parentId: v === "__none__" ? "" : v })
+                  }
                 >
-                  <SelectValue placeholder="无（顶级分类）" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">无（顶级分类）</SelectItem>
-                  {topLevelCategories
-                    .filter((c) => c.id !== editItem?.id)
-                    .map((c) => (
+                  <SelectTrigger>
+                    <SelectValue placeholder="无（顶级分类）" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">无（顶级分类）</SelectItem>
+                    {tree.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
-                        {c.icon ? `${c.icon} ` : ""}{c.name}
+                        {c.icon ? `${c.name}` : c.name}
+                        {c.childNodes.length > 0 && ` (${c.childNodes.length})`}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
-              {errors.parent && (
-                <p className="text-xs text-destructive">{errors.parent}</p>
-              )}
-            </div>
-
-            {/* 排序 */}
-            <div className="space-y-1.5">
-              <Label>排序权重</Label>
-              <Input
-                type="number"
-                min="0"
-                value={form.sort_order}
-                onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
-                placeholder="0"
-              />
-              <p className="text-xs text-muted-foreground">数值越小排越靠前</p>
-            </div>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -433,6 +484,7 @@ function BrandsTab() {
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     load()
@@ -510,6 +562,10 @@ function BrandsTab() {
     }
   }
 
+  const filteredBrands = searchQuery.trim()
+    ? brands.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : brands
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -522,25 +578,38 @@ function BrandsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-sm">共 {brands.length} 个品牌</p>
-        <Button onClick={openCreate} className="gap-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索品牌..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <p className="text-muted-foreground text-sm">
+          共 {brands.length} 个品牌
+          {brands.filter((b) => b.isPopular).length > 0 &&
+            `，${brands.filter((b) => b.isPopular).length} 个热门`}
+        </p>
+        <Button onClick={openCreate} className="ml-auto gap-1.5">
           <IconPlus className="h-4 w-4" />
           新建品牌
         </Button>
       </div>
 
-      {brands.length === 0 ? (
+      {filteredBrands.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-muted-foreground">
           <Tag className="h-12 w-12 mb-3 opacity-40" />
-          <p>暂无品牌数据</p>
+          <p>{searchQuery ? "没有匹配的品牌" : "暂无品牌数据"}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {brands.map((brand) => (
+          {filteredBrands.map((brand) => (
             <Card
               key={brand.id}
-              className="hover:shadow-md transition-shadow"
+              className="group hover:shadow-md transition-all hover:border-primary/30"
             >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
@@ -569,7 +638,7 @@ function BrandsTab() {
                       </a>
                     )}
                   </div>
-                  <div className="flex gap-1 shrink-0 ml-2">
+                  <div className="flex gap-1 shrink-0 ml-2 opacity-70 group-hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -674,54 +743,61 @@ function BrandsTab() {
 // ====================== 主页面 ======================
 export default function CatalogPage() {
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">商品目录管理</h1>
-        <p className="text-muted-foreground mt-1">
-          管理分类（树状 parent 自引用结构）与品牌
-        </p>
+    <div className="flex flex-1 flex-col">
+      <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">商品目录管理</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            管理分类与品牌。分类通过 children 字段实现树状结构
+          </p>
+        </div>
+
+        <Tabs defaultValue="categories" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="categories" className="gap-2">
+              <FolderTree className="h-4 w-4" />
+              分类管理
+            </TabsTrigger>
+            <TabsTrigger value="brands" className="gap-2">
+              <Tag className="h-4 w-4" />
+              品牌管理
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="categories">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderTree className="h-5 w-5 text-primary" />
+                  分类管理
+                </CardTitle>
+                <CardDescription>
+                  分类表通过 <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">children</code> 字段（relation 数组，自引用）实现树状结构。
+                  children 为空数组的是子分类，children 非空的是父分类。
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CategoriesTab />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="brands">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-primary" />
+                  品牌管理
+                </CardTitle>
+                <CardDescription>管理商品品牌信息，包括名称、描述、官网等</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <BrandsTab />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-
-      <Tabs defaultValue="categories" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="categories" className="gap-2">
-            <FolderTree className="h-4 w-4" />
-            分类管理
-          </TabsTrigger>
-          <TabsTrigger value="brands" className="gap-2">
-            <Tag className="h-4 w-4" />
-            品牌管理
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="categories">
-          <Card>
-            <CardHeader>
-              <CardTitle>分类管理</CardTitle>
-              <CardDescription>
-                Category 表通过 <code className="text-xs bg-muted px-1 rounded">parent</code> 字段（自引用 relation）实现树状结构。
-                前端通过 <code className="text-xs bg-muted px-1 rounded">buildCategoryTree()</code> 自动构建树形显示，
-                不在数据库中存储 children。
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CategoriesTab />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="brands">
-          <Card>
-            <CardHeader>
-              <CardTitle>品牌管理</CardTitle>
-              <CardDescription>管理商品品牌信息</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <BrandsTab />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }
