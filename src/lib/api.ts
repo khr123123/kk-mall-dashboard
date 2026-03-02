@@ -63,54 +63,70 @@ async function safeExec<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 }
 
 // ==================== Category Service ====================
-// 正确做法：Category 表有 parent 字段（relation, self-reference）
-// children 不存在数据库，由前端通过 buildCategoryTree() 构建
+// category 表通过 children 字段（relation 数组，自引用）实现树结构
+// children 为空数组 → 叶子节点（子分类）
+// children 非空 → 父分类，包含子分类 ID 列表
 
 /**
  * 获取全部分类（平铺列表）
  */
 export async function fetchCategories(): Promise<Category[]> {
   return pb.collection(COLLECTIONS.CATEGORY).getFullList<Category>({
-    sort: "sort_order,name",
-    // 可选：expand parent 以获取父分类名称
-    expand: "parent",
+    sort: "name",
   })
 }
 
 /**
- * 获取某个父级的直接子分类
- * @param parentId 父级 ID，空字符串表示顶级分类
+ * 获取全部分类并 expand children
  */
-export async function fetchCategoryChildren(parentId: string): Promise<Category[]> {
-  const filter = parentId
-    ? `parent = "${parentId}"`
-    : `parent = "" || parent = null`
+export async function fetchCategoriesExpanded(): Promise<Category[]> {
   return pb.collection(COLLECTIONS.CATEGORY).getFullList<Category>({
-    filter,
-    sort: "sort_order,name",
+    sort: "name",
+    expand: "children",
   })
 }
 
 /**
  * 将平铺分类列表构建为树状结构
- * 这是正确处理 Category.parent 自引用的方式
+ * 父分类 = children 数组非空的分类
+ * 子分类 = children 为空数组且被其他分类的 children 引用
  */
 export function buildCategoryTree(flatList: Category[]): CategoryNode[] {
   const map = new Map<string, CategoryNode>()
+  const childIdSet = new Set<string>()
+
+  // 收集所有被引用的子分类 ID
+  for (const cat of flatList) {
+    if (cat.children && cat.children.length > 0) {
+      for (const childId of cat.children) {
+        childIdSet.add(childId)
+      }
+    }
+  }
 
   // 初始化所有节点
   for (const cat of flatList) {
-    map.set(cat.id, { ...cat, children: [] })
+    map.set(cat.id, { ...cat, childNodes: [] })
   }
 
-  const roots: CategoryNode[] = []
-
+  // 构建树
   for (const cat of flatList) {
     const node = map.get(cat.id)!
-    if (cat.parent && map.has(cat.parent)) {
-      map.get(cat.parent)!.children.push(node)
-    } else {
-      roots.push(node)
+    if (cat.children && cat.children.length > 0) {
+      for (const childId of cat.children) {
+        const childNode = map.get(childId)
+        if (childNode) {
+          node.childNodes.push(childNode)
+        }
+      }
+    }
+  }
+
+  // 根节点 = 不在任何 children 数组中的分类
+  const roots: CategoryNode[] = []
+  for (const cat of flatList) {
+    if (!childIdSet.has(cat.id)) {
+      roots.push(map.get(cat.id)!)
     }
   }
 
@@ -125,31 +141,52 @@ export async function fetchCategoryTree(): Promise<CategoryNode[]> {
   return buildCategoryTree(flat)
 }
 
-export async function createCategory(data: Partial<Category>): Promise<Category> {
-  // 确保空 parent 不传，PocketBase 不接受 "" 作为 relation
+/**
+ * 创建子分类，并将其 ID 追加到父分类的 children 数组
+ */
+export async function createCategory(data: { name: string; icon?: string; parentId?: string }): Promise<Category> {
   const payload: Record<string, any> = {
     name: data.name,
     icon: data.icon || "",
-    sort_order: data.sort_order ?? 0,
+    children: [],
   }
-  if (data.parent) payload.parent = data.parent
-  return pb.collection(COLLECTIONS.CATEGORY).create<Category>(payload)
+  const created = await pb.collection(COLLECTIONS.CATEGORY).create<Category>(payload)
+
+  // 如果指定了父分类，将新分类 ID 追加到父分类的 children
+  if (data.parentId) {
+    const parent = await pb.collection(COLLECTIONS.CATEGORY).getOne<Category>(data.parentId)
+    const updatedChildren = [...(parent.children || []), created.id]
+    await pb.collection(COLLECTIONS.CATEGORY).update(data.parentId, { children: updatedChildren })
+  }
+
+  return created
 }
 
+/**
+ * 更新分类名称和图标
+ */
 export async function updateCategory(
   id: string,
-  data: Partial<Category>
+  data: { name?: string; icon?: string }
 ): Promise<Category> {
   const payload: Record<string, any> = {}
   if (data.name !== undefined) payload.name = data.name
   if (data.icon !== undefined) payload.icon = data.icon
-  if (data.sort_order !== undefined) payload.sort_order = data.sort_order
-  // 允许清空 parent（设为顶级）
-  payload.parent = data.parent || null
   return pb.collection(COLLECTIONS.CATEGORY).update<Category>(id, payload)
 }
 
-export async function deleteCategory(id: string): Promise<boolean> {
+/**
+ * 删除分类。如果它是某个父分类的子分类，也从父分类的 children 中移除
+ */
+export async function deleteCategory(id: string, allCategories: Category[]): Promise<boolean> {
+  // 找到包含此 ID 的父分类，从其 children 中移除
+  for (const cat of allCategories) {
+    if (cat.children && cat.children.includes(id)) {
+      const updatedChildren = cat.children.filter((cid) => cid !== id)
+      await pb.collection(COLLECTIONS.CATEGORY).update(cat.id, { children: updatedChildren })
+      break
+    }
+  }
   return pb.collection(COLLECTIONS.CATEGORY).delete(id)
 }
 
