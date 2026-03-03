@@ -746,9 +746,9 @@ export default function CatalogPage() {
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">商品目录管理</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            管理分类与品牌。分类通过 children 字段实现树状结构
+          <h1 className="page-title">商品目录管理</h1>
+          <p className="page-subtitle">
+            管理分类与品牌。分类支持树状层级结构
           </p>
         </div>
 

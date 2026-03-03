@@ -408,7 +408,7 @@ export default function ReportsPage() {
         {/* 页面标题 */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <h1 className="page-title flex items-center gap-2">
               <IconReport className="h-6 w-6 text-primary" />
               运营报告
             </h1>

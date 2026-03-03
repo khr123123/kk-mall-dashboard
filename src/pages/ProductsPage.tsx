@@ -1,3 +1,14 @@
+/**
+ * ProductsPage — Product Management
+ *
+ * Improvements:
+ * - Consistent Chinese UI labels
+ * - formatCurrency uses locale-aware formatter
+ * - Better empty/error states
+ * - Accessible table with ARIA labels
+ * - Stock badge uses colour + text (not colour-only)
+ */
+
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
 import { type ColumnDef } from "@tanstack/react-table"
@@ -9,7 +20,7 @@ import {
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react"
-import { Package, Search } from "lucide-react"
+import { Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -30,12 +41,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { DataTableGeneric } from "@/components/data-table-generic"
+import { PageLayout, PageHeader } from "@/components/layout"
+import { formatCurrency } from "@/lib/i18n"
 import { fetchProducts, deleteProduct, getFileUrl, fetchProductSkus } from "@/lib/api"
 import type { Product, ProductSku } from "@/types"
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount)
+// ── Stock status helper ───────────────────────────────────────
+function stockBadgeClass(stock: number): string {
+  if (stock <= 0)  return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/20 dark:text-red-400"
+  if (stock <= 10) return "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/20 dark:text-yellow-400"
+  return "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-400"
+}
 
+function stockLabel(stock: number): string {
+  if (stock <= 0)  return "缺货"
+  if (stock <= 10) return "紧张"
+  return "正常"
+}
+
+// ── ProductsPage ──────────────────────────────────────────────
 export default function ProductsPage() {
   const navigate = useNavigate()
   const [products, setProducts] = useState<Product[]>([])
@@ -57,20 +81,20 @@ export default function ProductsPage() {
       setProducts(result.items)
     } catch (error) {
       console.error("Failed to fetch products:", error)
-      toast.error("Failed to load products")
+      toast.error("商品加载失败")
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return
+    if (!confirm("确定要删除此商品？此操作不可撤销。")) return
     try {
       await deleteProduct(id)
-      toast.success("Product deleted")
+      toast.success("商品已删除")
       loadProducts()
-    } catch (error) {
-      toast.error("Failed to delete product")
+    } catch {
+      toast.error("删除失败")
     }
   }
 
@@ -88,15 +112,22 @@ export default function ProductsPage() {
   const columns: ColumnDef<Product>[] = [
     {
       accessorKey: "image",
-      header: "Image",
+      header: () => <span className="sr-only">商品图片</span>,
       cell: ({ row }) => {
         const img = row.original.image
         const url = img ? getFileUrl(row.original, img) : null
         return url ? (
-          <img src={url} alt={row.original.name} className="w-12 h-12 rounded object-cover" />
+          <img
+            src={url}
+            alt={`${row.original.name} 商品图`}
+            className="w-12 h-12 rounded-lg object-cover"
+          />
         ) : (
-          <div className="w-12 h-12 rounded bg-muted flex items-center justify-center">
-            <Package className="h-5 w-5 text-muted-foreground" />
+          <div
+            className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center"
+            aria-label="暂无图片"
+          >
+            <span className="text-xl" aria-hidden="true">📦</span>
           </div>
         )
       },
@@ -104,7 +135,7 @@ export default function ProductsPage() {
     },
     {
       accessorKey: "name",
-      header: "Name",
+      header: "商品名称",
       cell: ({ row }) => (
         <div className="min-w-0">
           <p className="font-medium truncate max-w-[200px]">{row.original.name}</p>
@@ -114,9 +145,9 @@ export default function ProductsPage() {
     },
     {
       accessorKey: "price",
-      header: () => <div className="text-right">Price</div>,
+      header: () => <div className="text-right">价格</div>,
       cell: ({ row }) => (
-        <div className="text-right">
+        <div className="text-right tabular-nums">
           <span className="font-medium">{formatCurrency(row.original.price)}</span>
           {row.original.originalPrice && row.original.originalPrice > row.original.price && (
             <span className="text-xs text-muted-foreground line-through ml-2">
@@ -129,21 +160,16 @@ export default function ProductsPage() {
     },
     {
       accessorKey: "stock",
-      header: "Stock",
+      header: "库存",
       cell: ({ row }) => {
         const stock = row.original.stock ?? 0
         return (
           <Badge
             variant="outline"
-            className={
-              stock <= 0
-                ? "bg-red-100 text-red-800"
-                : stock <= 10
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-green-100 text-green-800"
-            }
+            className={stockBadgeClass(stock)}
+            aria-label={`库存 ${stock} 件，状态：${stockLabel(stock)}`}
           >
-            {stock}
+            {stock} 件 · {stockLabel(stock)}
           </Badge>
         )
       },
@@ -151,42 +177,63 @@ export default function ProductsPage() {
     },
     {
       accessorKey: "rating",
-      header: "Rating",
-      cell: ({ row }) => <span>{(row.original.rating ?? 0).toFixed(1)}</span>,
+      header: "评分",
+      cell: ({ row }) => (
+        <span className="tabular-nums" aria-label={`评分 ${(row.original.rating ?? 0).toFixed(1)}`}>
+          ⭐ {(row.original.rating ?? 0).toFixed(1)}
+        </span>
+      ),
       enableSorting: true,
     },
     {
       id: "flags",
-      header: "Flags",
+      header: "标签",
       cell: ({ row }) => (
-        <div className="flex gap-1">
-          {row.original.isNew && <Badge className="bg-blue-500 text-white text-xs">New</Badge>}
-          {row.original.isHot && <Badge className="bg-red-500 text-white text-xs">Hot</Badge>}
-          {!row.original.inStock && <Badge variant="destructive" className="text-xs">OOS</Badge>}
+        <div className="flex gap-1 flex-wrap">
+          {row.original.isNew && (
+            <Badge className="bg-blue-500 text-white text-xs" aria-label="新品">新品</Badge>
+          )}
+          {row.original.isHot && (
+            <Badge className="bg-red-500 text-white text-xs" aria-label="热销">热销</Badge>
+          )}
+          {!row.original.inStock && (
+            <Badge variant="destructive" className="text-xs" aria-label="缺货">缺货</Badge>
+          )}
         </div>
       ),
       enableSorting: false,
     },
     {
       id: "actions",
-      header: () => null,
+      header: () => <span className="sr-only">操作</span>,
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <IconDotsVertical />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              aria-label={`商品「${row.original.name}」操作菜单`}
+            >
+              <IconDotsVertical aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuItem onClick={() => handleViewDetail(row.original)}>
-              <IconEye className="mr-2 h-4 w-4" /> View
+              <IconEye className="mr-2 h-4 w-4" aria-hidden="true" />
+              查看详情
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate(`/products/edit/${row.original.id}`)}>
-              <IconEdit className="mr-2 h-4 w-4" /> Edit
+              <IconEdit className="mr-2 h-4 w-4" aria-hidden="true" />
+              编辑商品
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => handleDelete(row.original.id)}>
-              <IconTrash className="mr-2 h-4 w-4" /> Delete
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => handleDelete(row.original.id)}
+            >
+              <IconTrash className="mr-2 h-4 w-4" aria-hidden="true" />
+              删除商品
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -196,44 +243,53 @@ export default function ProductsPage() {
   ]
 
   const toolbar = (
-    <div className="flex gap-4 items-center flex-1">
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <div className="toolbar">
+      <div className="toolbar-search">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+          aria-hidden="true"
+        />
         <Input
-          placeholder="Search products..."
+          placeholder="搜索商品名称…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
+          aria-label="搜索商品"
+          type="search"
         />
       </div>
-      <Button onClick={() => navigate("/products/add")} className="ml-auto gap-2">
-        <IconPlus className="h-4 w-4" />
-        Add Product
+      <Button
+        onClick={() => navigate("/products/add")}
+        className="ml-auto gap-2"
+        aria-label="新建商品"
+      >
+        <IconPlus className="h-4 w-4" aria-hidden="true" />
+        新建商品
       </Button>
     </div>
   )
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-        <p className="text-muted-foreground mt-1">Manage your product catalog</p>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="商品管理"
+        description="管理您的商品目录、库存与价格"
+      />
 
       <Card>
         <CardContent>
           <DataTableGeneric
             data={products}
             columns={columns}
-            enableRowSelection={true}
+            enableRowSelection
             enableDragDrop={false}
-            enableColumnVisibility={true}
-            enablePagination={true}
-            enableSorting={true}
+            enableColumnVisibility
+            enablePagination
+            enableSorting
             loading={loading}
             loadingRows={5}
             pageSize={10}
-            emptyMessage="No products found"
+            emptyMessage="暂无商品数据"
             toolbar={toolbar}
           />
         </CardContent>
@@ -241,58 +297,60 @@ export default function ProductsPage() {
 
       {/* Product Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" aria-describedby="product-detail-desc">
           <DialogHeader>
-            <DialogTitle>Product Details</DialogTitle>
-            <DialogDescription>{detailProduct?.name}</DialogDescription>
+            <DialogTitle>商品详情</DialogTitle>
+            <DialogDescription id="product-detail-desc">
+              {detailProduct?.name}
+            </DialogDescription>
           </DialogHeader>
           {detailProduct && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Price</p>
-                  <p className="font-medium">{formatCurrency(detailProduct.price)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Original Price</p>
-                  <p className="font-medium">{formatCurrency(detailProduct.originalPrice ?? 0)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Stock</p>
-                  <p className="font-medium">{detailProduct.stock ?? 0}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Rating</p>
-                  <p className="font-medium">{(detailProduct.rating ?? 0).toFixed(1)}</p>
-                </div>
-              </div>
+              <dl className="grid grid-cols-2 gap-4 text-sm">
+                {[
+                  { label: "售价",    value: <span className="tabular-nums">{formatCurrency(detailProduct.price)}</span> },
+                  { label: "原价",    value: <span className="tabular-nums">{formatCurrency(detailProduct.originalPrice ?? 0)}</span> },
+                  { label: "库存",    value: <span className="tabular-nums">{detailProduct.stock ?? 0} 件</span> },
+                  { label: "评分",    value: <span className="tabular-nums">⭐ {(detailProduct.rating ?? 0).toFixed(1)}</span> },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="font-medium">{value}</dd>
+                  </div>
+                ))}
+              </dl>
 
               {detailSkus.length > 0 && (
-                <div>
-                  <h4 className="font-semibold mb-2">SKU Variants ({detailSkus.length})</h4>
-                  <div className="space-y-2">
+                <section aria-label="SKU 规格">
+                  <h4 className="font-semibold mb-2">
+                    规格 SKU（共 {detailSkus.length} 个）
+                  </h4>
+                  <ul className="space-y-2">
                     {detailSkus.map((sku) => (
-                      <div key={sku.id} className="p-3 border rounded-lg flex items-center justify-between">
-                        <div>
+                      <li
+                        key={sku.id}
+                        className="p-3 border rounded-xl flex items-center justify-between"
+                      >
+                        <div className="flex flex-wrap gap-1">
                           {Object.entries(sku.specs || {}).map(([k, v]) => (
-                            <Badge key={k} variant="outline" className="mr-1 text-xs">
+                            <Badge key={k} variant="outline" className="text-xs">
                               {k}: {v}
                             </Badge>
                           ))}
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium">{formatCurrency(sku.price)}</p>
-                          <p className="text-xs text-muted-foreground">Stock: {sku.stock}</p>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className="font-medium tabular-nums">{formatCurrency(sku.price)}</p>
+                          <p className="text-xs text-muted-foreground tabular-nums">库存：{sku.stock}</p>
                         </div>
-                      </div>
+                      </li>
                     ))}
-                  </div>
-                </div>
+                  </ul>
+                </section>
               )}
             </div>
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   )
 }
