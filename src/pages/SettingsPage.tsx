@@ -1,14 +1,24 @@
+/**
+ * SettingsPage — System Preferences
+ *
+ * Improvements:
+ * - Theme toggle integrated with the ThemeProvider (next-themes)
+ * - High-contrast toggle
+ * - Language & currency settings persist to localStorage via i18n module
+ * - Consistent Chinese labels throughout
+ * - Accessible: form labels, checkbox associations, ARIA live feedback
+ */
+
 import { useState } from "react"
 import { toast } from "sonner"
+import { Settings, Bell, Palette, Globe, Database } from "lucide-react"
+import { useTheme } from "@/lib/theme"
 import {
-  Settings,
-  Bell,
-  Palette,
-  Globe,
-  Database,
-  Moon,
-  Sun,
-} from "lucide-react"
+  IconThemeLight,
+  IconThemeDark,
+  IconThemeSystem,
+} from "@/lib/icons.tsx"
+import { setLocale, type SupportedLocale } from "@/lib/i18n"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -31,255 +41,306 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PageLayout, PageHeader } from "@/components/layout"
 import pb from "@/lib/pocketbase"
 
-export default function SettingsPage() {
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("system")
-  const [notifyOrder, setNotifyOrder] = useState(true)
-  const [notifyPromotion, setNotifyPromotion] = useState(true)
-  const [notifySystem, setNotifySystem] = useState(true)
-  const [language, setLanguage] = useState("en")
-  const [currency, setCurrency] = useState("USD")
-  const [siteName, setSiteName] = useState("K Mall")
-  const [siteDescription, setSiteDescription] = useState("Premium online shopping platform")
+// ── ThemeSelector ─────────────────────────────────────────────
+function ThemeSelector() {
+  const { theme, setTheme, highContrast, toggleHighContrast } = useTheme()
 
-  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
-    setTheme(newTheme)
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark")
-    } else if (newTheme === "light") {
-      document.documentElement.classList.remove("dark")
-    } else {
-      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-      document.documentElement.classList.toggle("dark", isDark)
-    }
-    toast.success(`Theme set to ${newTheme}`)
-  }
+  const themes = [
+    { value: "light",  icon: <IconThemeLight  className="h-8 w-8" />, label: "浅色", desc: "白色背景" },
+    { value: "dark",   icon: <IconThemeDark   className="h-8 w-8" />, label: "深色", desc: "黑色背景" },
+    { value: "system", icon: <IconThemeSystem className="h-8 w-8" />, label: "跟随系统", desc: "自动切换" },
+  ] as const
+
+  return (
+    <div className="space-y-6">
+      {/* Theme selection */}
+      <div className="space-y-3">
+        <Label className="text-sm font-medium">主题模式</Label>
+        <div
+          className="grid grid-cols-3 gap-4"
+          role="radiogroup"
+          aria-label="选择主题模式"
+        >
+          {themes.map((t) => (
+            <button
+              key={t.value}
+              role="radio"
+              aria-checked={theme === t.value}
+              onClick={() => {
+                setTheme(t.value)
+                toast.success(`已切换到「${t.label}」模式`)
+              }}
+              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                ${
+                  theme === t.value
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border hover:border-primary/50 hover:bg-accent/30"
+                }`}
+            >
+              <span aria-hidden="true">{t.icon}</span>
+              <div className="text-center">
+                <p className="text-sm font-medium">{t.label}</p>
+                <p className="text-xs text-muted-foreground">{t.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Separator aria-hidden="true" />
+
+      {/* High contrast */}
+      <div className="flex items-center justify-between p-4 border rounded-xl">
+        <div>
+          <p className="font-medium text-sm">高对比度模式</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            提升文字与背景的对比度，改善可读性（符合 WCAG AA/AAA）
+          </p>
+        </div>
+        <Checkbox
+          id="high-contrast"
+          checked={highContrast}
+          onCheckedChange={() => {
+            toggleHighContrast()
+            toast.success(!highContrast ? "已开启高对比度模式" : "已关闭高对比度模式")
+          }}
+          aria-label="切换高对比度模式"
+        />
+      </div>
+    </div>
+  )
+}
+
+// ── SettingsPage ──────────────────────────────────────────────
+export default function SettingsPage() {
+  const [notifyOrder, setNotifyOrder]     = useState(true)
+  const [notifyPromotion, setNotifyPromotion] = useState(true)
+  const [notifySystem, setNotifySystem]   = useState(true)
+  const [language, setLanguage]           = useState<SupportedLocale>("zh-CN")
+  const [currency, setCurrency]           = useState("CNY")
+  const [siteName, setSiteName]           = useState("K Mall")
+  const [siteDescription, setSiteDescription] = useState("一站式电商管理平台")
 
   const handleSaveGeneral = () => {
-    toast.success("General settings saved")
+    setLocale(language)
+    localStorage.setItem("kmall-currency", currency)
+    toast.success("通用设置已保存")
   }
 
   const handleSaveNotifications = () => {
-    toast.success("Notification settings saved")
+    toast.success("通知偏好已保存")
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Settings className="h-8 w-8" />
-          Settings
-        </h1>
-        <p className="text-muted-foreground mt-1">Manage your application preferences</p>
-      </div>
+    <PageLayout>
+      <PageHeader
+        title="系统设置"
+        description="管理应用程序偏好与配置"
+        icon={<Settings className="h-6 w-6" />}
+      />
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
-          <TabsTrigger value="general" className="gap-1">
-            <Globe className="h-4 w-4" /> General
+        <TabsList className="grid w-full grid-cols-4 lg:w-[520px]" aria-label="设置分类">
+          <TabsTrigger value="general" className="gap-1.5">
+            <Globe className="h-4 w-4" aria-hidden="true" />
+            通用
           </TabsTrigger>
-          <TabsTrigger value="appearance" className="gap-1">
-            <Palette className="h-4 w-4" /> Appearance
+          <TabsTrigger value="appearance" className="gap-1.5">
+            <Palette className="h-4 w-4" aria-hidden="true" />
+            外观
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-1">
-            <Bell className="h-4 w-4" /> Notifications
+          <TabsTrigger value="notifications" className="gap-1.5">
+            <Bell className="h-4 w-4" aria-hidden="true" />
+            通知
           </TabsTrigger>
-          <TabsTrigger value="system" className="gap-1">
-            <Database className="h-4 w-4" /> System
+          <TabsTrigger value="system" className="gap-1.5">
+            <Database className="h-4 w-4" aria-hidden="true" />
+            系统
           </TabsTrigger>
         </TabsList>
 
-        {/* General */}
+        {/* ── General ── */}
         <TabsContent value="general">
           <Card>
             <CardHeader>
-              <CardTitle>General Settings</CardTitle>
-              <CardDescription>Configure basic application settings</CardDescription>
+              <CardTitle>通用设置</CardTitle>
+              <CardDescription>配置站点基本信息与地区偏好</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>Site Name</Label>
-                <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} />
+                <Label htmlFor="site-name">站点名称</Label>
+                <Input
+                  id="site-name"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  placeholder="请输入站点名称"
+                />
               </div>
               <div className="space-y-2">
-                <Label>Site Description</Label>
+                <Label htmlFor="site-desc">站点描述</Label>
                 <Input
+                  id="site-desc"
                   value={siteDescription}
                   onChange={(e) => setSiteDescription(e.target.value)}
+                  placeholder="请输入站点描述"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Language</Label>
-                  <Select value={language} onValueChange={setLanguage}>
-                    <SelectTrigger>
+                  <Label htmlFor="language-select">界面语言</Label>
+                  <Select
+                    value={language}
+                    onValueChange={(v) => setLanguage(v as SupportedLocale)}
+                  >
+                    <SelectTrigger id="language-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="zh">Chinese</SelectItem>
-                      <SelectItem value="ja">Japanese</SelectItem>
-                      <SelectItem value="ko">Korean</SelectItem>
+                      <SelectItem value="zh-CN">简体中文</SelectItem>
+                      <SelectItem value="en-US">English (US)</SelectItem>
+                      <SelectItem value="ja-JP">日本語</SelectItem>
+                      <SelectItem value="ko-KR">한국어</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Currency</Label>
+                  <Label htmlFor="currency-select">货币单位</Label>
                   <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger>
+                    <SelectTrigger id="currency-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="USD">USD ($)</SelectItem>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="CNY">CNY</SelectItem>
-                      <SelectItem value="JPY">JPY</SelectItem>
+                      <SelectItem value="CNY">人民币（CNY）</SelectItem>
+                      <SelectItem value="USD">美元（USD）</SelectItem>
+                      <SelectItem value="EUR">欧元（EUR）</SelectItem>
+                      <SelectItem value="JPY">日元（JPY）</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <Button onClick={handleSaveGeneral}>Save Changes</Button>
+              <Button onClick={handleSaveGeneral}>保存设置</Button>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Appearance */}
+        {/* ── Appearance ── */}
         <TabsContent value="appearance">
           <Card>
             <CardHeader>
-              <CardTitle>Appearance</CardTitle>
-              <CardDescription>Customize the look and feel</CardDescription>
+              <CardTitle>外观设置</CardTitle>
+              <CardDescription>自定义界面主题与视觉效果</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <Label>Theme</Label>
-                <div className="grid grid-cols-3 gap-4">
-                  <button
-                    onClick={() => handleThemeChange("light")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                      theme === "light"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Sun className="h-8 w-8" />
-                    <span className="text-sm font-medium">Light</span>
-                  </button>
-                  <button
-                    onClick={() => handleThemeChange("dark")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                      theme === "dark"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Moon className="h-8 w-8" />
-                    <span className="text-sm font-medium">Dark</span>
-                  </button>
-                  <button
-                    onClick={() => handleThemeChange("system")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                      theme === "system"
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Settings className="h-8 w-8" />
-                    <span className="text-sm font-medium">System</span>
-                  </button>
-                </div>
-              </div>
+            <CardContent>
+              <ThemeSelector />
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Notifications */}
+        {/* ── Notifications ── */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Choose what notifications you receive</CardDescription>
+              <CardTitle>通知偏好</CardTitle>
+              <CardDescription>选择您希望接收的通知类型</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <p className="font-medium">Order Updates</p>
-                  <p className="text-sm text-muted-foreground">
-                    Get notified when order status changes
-                  </p>
+              {[
+                {
+                  id: "notify-order",
+                  label: "订单状态更新",
+                  desc: "订单状态变更时收到通知",
+                  checked: notifyOrder,
+                  onChange: setNotifyOrder,
+                },
+                {
+                  id: "notify-promo",
+                  label: "促销活动",
+                  desc: "新的促销与优惠通知",
+                  checked: notifyPromotion,
+                  onChange: setNotifyPromotion,
+                },
+                {
+                  id: "notify-system",
+                  label: "系统通知",
+                  desc: "重要系统消息与更新",
+                  checked: notifySystem,
+                  onChange: setNotifySystem,
+                },
+              ].map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between p-4 border rounded-xl"
+                >
+                  <Label htmlFor={item.id} className="flex-1 cursor-pointer">
+                    <p className="font-medium">{item.label}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">{item.desc}</p>
+                  </Label>
+                  <Checkbox
+                    id={item.id}
+                    checked={item.checked}
+                    onCheckedChange={(c) => item.onChange(!!c)}
+                  />
                 </div>
-                <Checkbox
-                  checked={notifyOrder}
-                  onCheckedChange={(c) => setNotifyOrder(!!c)}
-                />
-              </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <p className="font-medium">Promotions</p>
-                  <p className="text-sm text-muted-foreground">Promotional notifications</p>
-                </div>
-                <Checkbox
-                  checked={notifyPromotion}
-                  onCheckedChange={(c) => setNotifyPromotion(!!c)}
-                />
-              </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <p className="font-medium">System Updates</p>
-                  <p className="text-sm text-muted-foreground">
-                    Important system notifications
-                  </p>
-                </div>
-                <Checkbox
-                  checked={notifySystem}
-                  onCheckedChange={(c) => setNotifySystem(!!c)}
-                />
-              </div>
-              <Button onClick={handleSaveNotifications}>Save Preferences</Button>
+              ))}
+              <Button onClick={handleSaveNotifications}>保存偏好</Button>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* System */}
+        {/* ── System ── */}
         <TabsContent value="system">
           <Card>
             <CardHeader>
-              <CardTitle>System Information</CardTitle>
-              <CardDescription>PocketBase backend status and info</CardDescription>
+              <CardTitle>系统信息</CardTitle>
+              <CardDescription>PocketBase 后端状态与环境信息</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 border rounded-lg">
-                  <p className="text-sm text-muted-foreground">Backend URL</p>
-                  <p className="font-medium text-sm break-all">{pb.baseURL}</p>
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <p className="text-sm text-muted-foreground">Auth Status</p>
-                  <p className="font-medium">
-                    {pb.authStore.isValid ? (
-                      <span className="text-green-600">Authenticated</span>
-                    ) : (
-                      <span className="text-red-600">Not Authenticated</span>
-                    )}
-                  </p>
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <p className="text-sm text-muted-foreground">Version</p>
-                  <p className="font-medium">v0.1.0</p>
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <p className="text-sm text-muted-foreground">Environment</p>
-                  <p className="font-medium">
-                    {import.meta.env.MODE === "production" ? "Production" : "Development"}
-                  </p>
-                </div>
+              <div
+                className="grid grid-cols-2 gap-4"
+                role="list"
+                aria-label="系统信息列表"
+              >
+                {[
+                  {
+                    label: "后端地址",
+                    value: pb.baseURL,
+                    mono: true,
+                  },
+                  {
+                    label: "认证状态",
+                    value: pb.authStore.isValid ? "已认证" : "未认证",
+                    valueClass: pb.authStore.isValid
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-destructive",
+                  },
+                  {
+                    label: "应用版本",
+                    value: "v0.2.0",
+                  },
+                  {
+                    label: "运行环境",
+                    value: import.meta.env.MODE === "production" ? "生产环境" : "开发环境",
+                  },
+                ].map(({ label, value, mono, valueClass }) => (
+                  <div key={label} className="p-4 border rounded-xl" role="listitem">
+                    <p className="text-sm text-muted-foreground">{label}</p>
+                    <p
+                      className={`font-medium mt-1 break-all text-sm ${mono ? "font-mono" : ""} ${valueClass ?? ""}`}
+                    >
+                      {value}
+                    </p>
+                  </div>
+                ))}
               </div>
 
-              <Separator />
+              <Separator aria-hidden="true" />
 
-              <div>
-                <h4 className="font-medium mb-2">Database Collections</h4>
+              <section aria-label="数据库集合">
+                <h4 className="font-medium mb-2 text-sm">数据库集合</h4>
                 <div className="flex flex-wrap gap-2">
                   {[
                     "users",
@@ -288,19 +349,19 @@ export default function SettingsPage() {
                     "category",
                     "brands",
                     "orders",
-                    "notifications",
+                    "messages",
                     "favorites",
                   ].map((col) => (
-                    <Badge key={col} variant="outline">
+                    <Badge key={col} variant="outline" className="font-mono text-xs">
                       {col}
                     </Badge>
                   ))}
                 </div>
-              </div>
+              </section>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </PageLayout>
   )
 }

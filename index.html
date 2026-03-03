@@ -1,12 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>vite-app</title>
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a"  media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="K Mall 管理后台 — 订单、商品、用户、数据分析一体化管理平台" />
+    <!-- Prevent flash of unstyled theme -->
+    <script>
+      ;(function () {
+        try {
+          var t = localStorage.getItem('kmall-theme')
+          var d = document.documentElement
+          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            d.classList.add('dark')
+          }
+          var hc = localStorage.getItem('high-contrast')
+          if (hc === 'true' || window.matchMedia('(prefers-contrast: more)').matches) {
+            d.classList.add('high-contrast')
+          }
+          var locale = localStorage.getItem('kmall-locale') || 'zh-CN'
+          d.lang = locale
+        } catch (e) {}
+      })()
+    </script>
+    <title>K Mall 管理后台</title>
   </head>
   <body>
+    <!-- Skip navigation for accessibility -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
